@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '../lib/supabase';
+import { useRouter } from 'next/navigation';
 
 export default function AuthUI() {
   const [email, setEmail] = useState('');
@@ -13,6 +14,7 @@ export default function AuthUI() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'standard' | 'otp'>('standard');
+  const router = useRouter();
   
   // Get the current origin for redirects
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -67,9 +69,14 @@ export default function AuthUI() {
       } else {
         setMessage('Login successful! Redirecting...');
         
-        // Let the auth context handle navigation instead of direct navigation
-        console.log('Authentication successful, letting context handler redirect');
-        // The onAuthStateChange listener in SupabaseContext will handle the redirect
+        // Log authentication success and cookies for debugging
+        console.log('Authentication successful via OTP with user:', data.session?.user?.id);
+        
+        // Force a direct navigation instead of waiting for context
+        setTimeout(() => {
+          console.log('Manually redirecting to /editor after successful OTP login');
+          router.replace('/editor');
+        }, 500); // Short delay to allow state to update
       }
     } catch (err) {
       setError('Failed to verify OTP. Please try again.');
