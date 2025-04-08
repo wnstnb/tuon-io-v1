@@ -1,0 +1,32 @@
+{
+  "name": "tuon-io-v1",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@blocknote/core": "^0.28.0",
+    "@blocknote/mantine": "^0.28.0",
+    "@blocknote/react": "^0.28.0",
+    "@types/react-transition-group": "^4.4.12",
+    "lucide-react": "^0.487.0",
+    "next": "^15.2.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-resizable-panels": "^2.1.7",
+    "react-transition-group": "^4.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.14.0",
+    "@types/react": "19.1.0",
+    "typescript": "5.8.3"
+  }
+}
