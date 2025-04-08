@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { MessageSquare, Files, History } from 'lucide-react';
+import ChatInterface from './ChatInterface';
+import ChatHistory from './ChatHistory';
 
 type Tab = 'conversation' | 'fileExplorer' | 'conversationHistory';
 
@@ -39,8 +41,7 @@ export default function LeftPane() {
       <div className="tab-content">
         {activeTab === 'conversation' && (
           <div className="tab-panel">
-            {/* Conversation content will go here */}
-            <p>Conversation tab content</p>
+            <ChatInterface />
           </div>
         )}
         {activeTab === 'fileExplorer' && (
@@ -51,8 +52,7 @@ export default function LeftPane() {
         )}
         {activeTab === 'conversationHistory' && (
           <div className="tab-panel">
-            {/* Conversation History content will go here */}
-            <p>History tab content</p>
+            <ChatHistory />
           </div>
         )}
       </div>

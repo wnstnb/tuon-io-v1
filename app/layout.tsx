@@ -4,7 +4,7 @@ import React from 'react';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
 import './globals.css';
-import { ThemeProviderWrapper } from './context/ThemeProviderWrapper';
+import ClientProviders from './context/ClientProviders';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -21,9 +21,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThemeProviderWrapper>
+        <ClientProviders>
           {children}
-        </ThemeProviderWrapper>
+        </ClientProviders>
       </body>
     </html>
   );
