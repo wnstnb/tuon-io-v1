@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Message } from '../context/AIContext';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, ImageIcon } from 'lucide-react';
 
 interface ChatMessageProps {
   message: Message;
@@ -10,6 +10,7 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const hasImage = !!message.imageUrl;
   
   return (
     <div className={`chat-message ${isUser ? 'user-message' : 'assistant-message'}`}>
@@ -18,12 +19,25 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       </div>
       <div className="message-content">
         <div className="message-bubble">
-          {message.content.split('\n').map((line, i) => (
+          {/* Display text content */}
+          {message.content && message.content.split('\n').map((line, i) => (
             <React.Fragment key={i}>
               {line}
               {i < message.content.split('\n').length - 1 && <br />}
             </React.Fragment>
           ))}
+          
+          {/* Display image if present */}
+          {hasImage && (
+            <div className="message-image-container">
+              <img 
+                src={message.imageUrl} 
+                alt="User uploaded image" 
+                className="message-image"
+                onClick={() => window.open(message.imageUrl, '_blank')}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

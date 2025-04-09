@@ -1,13 +1,16 @@
 'use client';
 
 import React, { useState, FormEvent, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Image } from 'lucide-react';
 import { useAI } from '../context/AIContext';
 
 export default function ChatInput() {
   const [message, setMessage] = useState('');
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const { sendMessage, isLoading } = useAI();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -22,10 +25,98 @@ export default function ChatInput() {
     }
   }, [message]);
 
+  // Add event listener for paste events
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (isLoading) return;
+      
+      // Check if we're pasting into the textarea or its parent
+      if (
+        e.target === textareaRef.current || 
+        textareaRef.current?.contains(e.target as Node)
+      ) {
+        // Check if clipboard has images
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image') !== -1) {
+            e.preventDefault(); // Prevent default paste behavior for images
+            
+            const file = items[i].getAsFile();
+            if (!file) continue;
+            
+            // Check file size (limit to 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+              alert('Image size should be less than 10MB');
+              return;
+            }
+            
+            setSelectedImage(file);
+            
+            // Create a preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              setImagePreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+            
+            // Don't break the loop because we want text too if available
+          }
+        }
+      }
+    };
+
+    // Add the event listener to the window
+    window.addEventListener('paste', handlePaste);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [isLoading]);
+
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      // Check file size (limit to 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
+        return;
+      }
+      
+      setSelectedImage(file);
+      
+      // Create a preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Clear selected image
+  const clearSelectedImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
-    if (!message.trim() || isLoading) return;
+    if ((!message.trim() && !selectedImage) || isLoading) return;
     
     const userMessage = message;
     setMessage('');
@@ -35,7 +126,14 @@ export default function ChatInput() {
       textareaRef.current.style.height = 'auto';
     }
     
-    await sendMessage(userMessage);
+    // Handle message with image
+    if (selectedImage) {
+      const imageDataUrl = imagePreview;
+      clearSelectedImage();
+      await sendMessage(userMessage, imageDataUrl);
+    } else {
+      await sendMessage(userMessage);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -48,25 +146,63 @@ export default function ChatInput() {
 
   return (
     <form onSubmit={handleSubmit} className="chat-input-container">
-      <div className="textarea-container">
-        <textarea
-          ref={textareaRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Send a message..."
-          disabled={isLoading}
-          rows={1}
-          className="chat-textarea"
-        />
+      {imagePreview && (
+        <div className="image-preview-container">
+          <img 
+            src={imagePreview} 
+            alt="Preview" 
+            className="image-preview" 
+          />
+          <button 
+            type="button" 
+            onClick={clearSelectedImage}
+            className="clear-image-button"
+            aria-label="Remove image"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+      <div className="input-wrapper">
+        <div className="textarea-container">
+          <textarea
+            ref={textareaRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Send a message or paste an image..."
+            disabled={isLoading}
+            rows={1}
+            className="chat-textarea"
+          />
+        </div>
+        <div className="input-buttons">
+          <button 
+            type="button" 
+            onClick={() => fileInputRef.current?.click()}
+            className="image-button"
+            disabled={isLoading}
+            aria-label="Upload image"
+          >
+            <Image size={18} />
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            style={{ display: 'none' }}
+          />
+          <button 
+            type="submit" 
+            disabled={(!message.trim() && !selectedImage) || isLoading}
+            className="send-button"
+            aria-label="Send message"
+          >
+            <Send size={18} />
+          </button>
+        </div>
       </div>
-      <button 
-        type="submit" 
-        disabled={!message.trim() || isLoading}
-        className="send-button"
-      >
-        <Send size={18} />
-      </button>
     </form>
   );
 } 

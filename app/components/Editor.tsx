@@ -11,8 +11,32 @@ const BlockNoteEditor = dynamic(
       default: (props: any) => {
         const { useCreateBlockNote } = mod;
         const { BlockNoteView } = require('@blocknote/mantine');
+        
+        // Create editor with image upload support
         const editor = useCreateBlockNote({
           initialContent: props.initialContent,
+          // Add file upload handler for images
+          uploadFile: async (file) => {
+            // Check if file is an image
+            if (!file.type.startsWith('image/')) {
+              throw new Error('Only image files are supported');
+            }
+            
+            // Check file size (10MB max)
+            if (file.size > 10 * 1024 * 1024) {
+              throw new Error('Image size should be less than 10MB');
+            }
+            
+            // Convert the file to a data URL
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                resolve(e.target?.result as string);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+          }
         });
         
         // Register onChange handler

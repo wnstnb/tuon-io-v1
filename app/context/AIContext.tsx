@@ -15,6 +15,8 @@ export type AIModelType =
 export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  imageUrl?: string;  // Add support for image URL or base64 data
+  contentType?: 'text' | 'image' | 'text-with-image';  // Define content type
 }
 
 // Define conversation type
@@ -35,7 +37,7 @@ interface AIContextType {
   currentConversation: Conversation | null;
   conversationHistory: Conversation[];
   createNewConversation: (model?: AIModelType) => void;
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, imageDataUrl?: string | null) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
 }
@@ -108,7 +110,7 @@ export function AIProvider({ children }: AIProviderProps) {
   };
 
   // Send a message to the AI
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, imageDataUrl?: string | null) => {
     // Check if API clients are initialized
     if (!openaiClient || !genaiClient) {
       console.error('API clients not initialized yet');
@@ -130,7 +132,15 @@ export function AIProvider({ children }: AIProviderProps) {
       };
       
       // Add user message to conversation
-      const userMessage: Message = { role: 'user', content };
+      const userMessage: Message = imageDataUrl 
+        ? { 
+            role: 'user', 
+            content, 
+            imageUrl: imageDataUrl,
+            contentType: content.trim() ? 'text-with-image' : 'image'
+          }
+        : { role: 'user', content, contentType: 'text' };
+        
       newConversation.messages.push(userMessage);
       
       setCurrentConversation(newConversation);
@@ -140,12 +150,12 @@ export function AIProvider({ children }: AIProviderProps) {
       
       try {
         // Process AI response with the new conversation
-        let aiResponse = await getAIResponse(newConversation, content);
+        let aiResponse = await getAIResponse(newConversation, content, imageDataUrl);
         
         // Add AI response to conversation
-        const assistantMessage: Message = { role: 'assistant', content: aiResponse };
+        const assistantMessage: Message = { role: 'assistant', content: aiResponse, contentType: 'text' };
         newConversation.messages.push(assistantMessage);
-        newConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+        newConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '') || 'Image Conversation';
         newConversation.updatedAt = new Date();
         
         setCurrentConversation({...newConversation});
@@ -158,7 +168,8 @@ export function AIProvider({ children }: AIProviderProps) {
         // Add error message to conversation
         const errorMessage: Message = { 
           role: 'assistant', 
-          content: `Error: Could not get a response from the AI model. Please check your API keys and try again.` 
+          content: `Error: Could not get a response from the AI model. Please check your API keys and try again.`,
+          contentType: 'text'
         };
         
         newConversation.messages.push(errorMessage);
@@ -175,7 +186,15 @@ export function AIProvider({ children }: AIProviderProps) {
     }
     
     // Add user message to existing conversation
-    const userMessage: Message = { role: 'user', content };
+    const userMessage: Message = imageDataUrl 
+      ? { 
+          role: 'user', 
+          content, 
+          imageUrl: imageDataUrl,
+          contentType: content.trim() ? 'text-with-image' : 'image'
+        }
+      : { role: 'user', content, contentType: 'text' };
+      
     const updatedConversation = {
       ...currentConversation,
       messages: [...currentConversation.messages, userMessage],
@@ -190,10 +209,10 @@ export function AIProvider({ children }: AIProviderProps) {
     setIsLoading(true);
     
     try {
-      let aiResponse = await getAIResponse(updatedConversation, content);
+      let aiResponse = await getAIResponse(updatedConversation, content, imageDataUrl);
       
       // Add AI response to conversation
-      const assistantMessage: Message = { role: 'assistant', content: aiResponse };
+      const assistantMessage: Message = { role: 'assistant', content: aiResponse, contentType: 'text' };
       const finalConversation = {
         ...updatedConversation,
         messages: [...updatedConversation.messages, assistantMessage],
@@ -202,7 +221,7 @@ export function AIProvider({ children }: AIProviderProps) {
       
       // Update title if this is the first exchange
       if (finalConversation.messages.length === 2 && finalConversation.title === 'New Conversation') {
-        finalConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+        finalConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '') || 'Image Conversation';
       }
       
       setCurrentConversation(finalConversation);
@@ -215,7 +234,8 @@ export function AIProvider({ children }: AIProviderProps) {
       // Add error message to conversation
       const errorMessage: Message = { 
         role: 'assistant', 
-        content: `Error: Could not get a response from the AI model. Please check your API keys and try again.` 
+        content: `Error: Could not get a response from the AI model. Please check your API keys and try again.`,
+        contentType: 'text'
       };
       
       const errorConversation = {
@@ -234,22 +254,71 @@ export function AIProvider({ children }: AIProviderProps) {
   };
   
   // Helper function to get AI response based on model type
-  const getAIResponse = async (conversation: Conversation, content: string): Promise<string> => {
+  const getAIResponse = async (conversation: Conversation, content: string, imageDataUrl?: string | null): Promise<string> => {
     let aiResponse: string = '';
+    
+    // Get latest message (which should be the one with image if present)
+    const latestMessage = conversation.messages[conversation.messages.length - 1];
+    const hasImage = !!latestMessage.imageUrl;
     
     // Process based on model type
     if (conversation.model.startsWith('gpt')) {
       // OpenAI API call
       try {
-        const response = await openaiClient.chat.completions.create({
-          model: conversation.model,
-          messages: conversation.messages.map(({ role, content }) => ({ 
-            role: role as 'user' | 'assistant' | 'system', 
-            content 
-          })),
-        });
-        
-        aiResponse = response.choices[0]?.message?.content || 'No response from AI';
+        if (hasImage) {
+          // For models that support image input like gpt-4o
+          const messages = conversation.messages.map((msg) => {
+            if (msg.imageUrl && msg.role === 'user') {
+              // For messages with images
+              const content = [];
+              
+              // Add text content if exists
+              if (msg.content) {
+                content.push({
+                  type: 'text',
+                  text: msg.content
+                });
+              }
+              
+              // Add image content
+              content.push({
+                type: 'image_url',
+                image_url: {
+                  url: msg.imageUrl
+                }
+              });
+              
+              return {
+                role: msg.role,
+                content: content
+              };
+            } else {
+              // For text-only messages
+              return {
+                role: msg.role,
+                content: msg.content
+              };
+            }
+          });
+          
+          const response = await openaiClient.chat.completions.create({
+            model: conversation.model,
+            messages: messages as any,
+          });
+          
+          aiResponse = response.choices[0]?.message?.content || 'No response from AI';
+        } else {
+          // Standard text-only messages
+          const response = await openaiClient.chat.completions.create({
+            model: conversation.model,
+            messages: conversation.messages.map(({ role, content }) => ({ 
+              role: role as 'user' | 'assistant' | 'system', 
+              content 
+            })),
+          });
+          
+          aiResponse = response.choices[0]?.message?.content || 'No response from AI';
+        }
       } catch (error) {
         console.error('OpenAI API error:', error);
         aiResponse = 'Error: Failed to get response from OpenAI. Please check your API key.';
@@ -259,15 +328,48 @@ export function AIProvider({ children }: AIProviderProps) {
       try {
         const geminiModel = genaiClient.getGenerativeModel({ model: conversation.model });
         
-        const chat = geminiModel.startChat({
-          history: conversation.messages.map(({ role, content }) => ({
-            role: role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: content }],
-          })),
-        });
-        
-        const result = await chat.sendMessage(content);
-        aiResponse = result.response.text();
+        if (hasImage) {
+          // For Gemini with image
+          const history = conversation.messages
+            .slice(0, -1) // Exclude the last message with image
+            .map(({ role, content }) => ({
+              role: role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: content }],
+            }));
+            
+          const chat = geminiModel.startChat({ history });
+          
+          // Create parts for the message with image
+          const parts = [];
+          if (latestMessage.content) {
+            parts.push({ text: latestMessage.content });
+          }
+          
+          if (latestMessage.imageUrl) {
+            // Extract base64 data from data URL
+            const base64Data = latestMessage.imageUrl.split(',')[1];
+            parts.push({
+              inlineData: {
+                data: base64Data,
+                mimeType: 'image/jpeg' // Assuming JPEG format
+              }
+            });
+          }
+          
+          const result = await chat.sendMessage(parts);
+          aiResponse = result.response.text();
+        } else {
+          // Standard text-only messages
+          const chat = geminiModel.startChat({
+            history: conversation.messages.map(({ role, content }) => ({
+              role: role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: content }],
+            })),
+          });
+          
+          const result = await chat.sendMessage(content);
+          aiResponse = result.response.text();
+        }
       } catch (error) {
         console.error('Gemini API error:', error);
         aiResponse = 'Error: Failed to get response from Gemini. Please check your API key.';

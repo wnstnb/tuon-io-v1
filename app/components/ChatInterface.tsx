@@ -27,6 +27,9 @@ export default function ChatInterface() {
           <div className="empty-chat">
             <h3>Start a new conversation</h3>
             <p>Select a model and send a message to begin</p>
+            <p className="chat-tips">
+              <strong>Tip:</strong> You can upload images using the image button or by pasting them directly (Ctrl+V)
+            </p>
           </div>
         ) : (
           <>

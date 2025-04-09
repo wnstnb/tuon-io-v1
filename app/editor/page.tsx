@@ -7,7 +7,7 @@ import Editor from '../components/Editor';
 import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
 import { type Block } from "@blocknote/core";
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
 
 // Use dynamic import with SSR disabled for ThemeToggle
@@ -22,6 +22,7 @@ export default function EditorPage() {
   const [editorContent, setEditorContent] = useState<Block[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [leftPanelSize, setLeftPanelSize] = useState(20);
+  const [showTipBanner, setShowTipBanner] = useState(true);
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
@@ -110,6 +111,24 @@ export default function EditorPage() {
                 onTitleChange={handleTitleChange} 
               />
               <Editor onChange={handleContentChange} />
+              {showTipBanner && (
+                <div className="tip-banner">
+                  <div className="tip-content">
+                    <Info size={18} />
+                    <span>
+                      <strong>Image Tips:</strong> Insert images by typing / and selecting Image, dragging & dropping files, or pasting images directly (Ctrl+V) into the editor
+                    </span>
+                  </div>
+                  <button 
+                    type="button" 
+                    className="tip-close" 
+                    onClick={() => setShowTipBanner(false)}
+                    aria-label="Close tip"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           </Panel>
         </PanelGroup>
