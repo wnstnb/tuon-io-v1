@@ -15,7 +15,7 @@ export type AIModelType =
 export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
-  imageUrl?: string;  // Add support for image URL or base64 data
+  imageUrl?: string;  // Now stores either full URL (legacy) or path in format 'bucket/userId/path/filename'
   contentType?: 'text' | 'image' | 'text-with-image';  // Define content type
   model?: AIModelType;  // Model used for this message
   artifactId?: string;  // Associated artifact ID
@@ -84,19 +84,33 @@ export function AIProvider({ children }: AIProviderProps) {
       // Process based on model type
       if (conversation.model.startsWith('gpt')) {
         // Prepare messages including system prompt if needed
-        const messages = conversation.messages.map(({ role, content, imageUrl }) => {
+        const messages = await Promise.all(conversation.messages.map(async ({ role, content, imageUrl }) => {
           if (imageUrl && role === 'user') {
-            // Handle images for vision models
+            // Handle images for vision models - get authenticated URL if needed
+            let processedImageUrl = imageUrl;
+            
+            // Check if this is a path format that needs conversion
+            if (imageUrl.includes('/') && !imageUrl.startsWith('http')) {
+              try {
+                const { ImageService } = await import('../lib/services/ImageService');
+                processedImageUrl = await ImageService.getAuthenticatedUrl(imageUrl);
+              } catch (error) {
+                console.error('Error getting authenticated URL for vision model:', error);
+                // Fall back to the original URL
+                processedImageUrl = imageUrl;
+              }
+            }
+            
             return {
               role,
               content: [
                 { type: 'text', text: content },
-                { type: 'image_url', image_url: { url: imageUrl } }
+                { type: 'image_url', image_url: { url: processedImageUrl } }
               ]
             };
           }
           return { role, content };
-        });
+        }));
         
         // OpenAI API call
         const response = await openaiClient.chat.completions.create({

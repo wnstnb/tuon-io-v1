@@ -8,7 +8,7 @@ import Editor from '../components/Editor';
 import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
 import { type Block } from "@blocknote/core";
-import { ChevronLeft, ChevronRight, Info, X, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
 import { User } from '@supabase/supabase-js';
 import { ArtifactService } from '../lib/services/ArtifactService';
@@ -39,7 +39,6 @@ function EditorPageContent() {
   ]);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [leftPanelSize, setLeftPanelSize] = useState(20);
-  const [showTipBanner, setShowTipBanner] = useState(true);
   const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(artifactId || undefined);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [isSaving, setIsSaving] = useState(false);
@@ -283,24 +282,6 @@ function EditorPageContent() {
               <Editor 
                 {...editorProps}
               />
-              {showTipBanner && (
-                <div className="tip-banner">
-                  <div className="tip-content">
-                    <Info size={18} />
-                    <span>
-                      <strong>Image Tips:</strong> Insert images by typing / and selecting Image, dragging & dropping files, or pasting images directly (Ctrl+V) into the editor
-                    </span>
-                  </div>
-                  <button 
-                    type="button" 
-                    className="tip-close" 
-                    onClick={() => setShowTipBanner(false)}
-                    aria-label="Close tip"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              )}
             </div>
           </Panel>
         </PanelGroup>
