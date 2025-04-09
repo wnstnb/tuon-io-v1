@@ -8,12 +8,14 @@ interface ThemeAwareEditorProps {
   initialContent?: Block[];
   onChange?: (content: Block[]) => void;
   EditorComponent: ComponentType<any>;
+  [key: string]: any; // Allow any additional props
 }
 
 export default function ThemeAwareEditor({ 
   initialContent, 
   onChange, 
-  EditorComponent 
+  EditorComponent,
+  ...restProps
 }: ThemeAwareEditorProps) {
   const [mounted, setMounted] = useState(false);
   // Always call useTheme at the component level, regardless of mounting state
@@ -35,6 +37,7 @@ export default function ThemeAwareEditor({
       initialContent={initialContent}
       onChange={onChange}
       theme={theme}
+      {...restProps}
     />
   );
 } 

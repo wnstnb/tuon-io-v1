@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -17,6 +17,11 @@ export interface Message {
   content: string;
   imageUrl?: string;  // Add support for image URL or base64 data
   contentType?: 'text' | 'image' | 'text-with-image';  // Define content type
+  model?: AIModelType;  // Model used for this message
+  artifactId?: string;  // Associated artifact ID
+  metadata?: any;  // Performance metrics and other metadata
+  rawResponse?: any;  // Raw API response data
+  created_at?: Date;  // Timestamp from database
 }
 
 // Define conversation type
@@ -34,12 +39,14 @@ interface AIContextType {
   currentModel: AIModelType;
   setCurrentModel: (model: AIModelType) => void;
   isLoading: boolean;
+  isLoadingConversations: boolean;  // Add loading state for conversations
   currentConversation: Conversation | null;
   conversationHistory: Conversation[];
   createNewConversation: (model?: AIModelType) => void;
   sendMessage: (content: string, imageDataUrl?: string | null) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
+  loadUserConversations: () => Promise<void>;
 }
 
 // Create the AI context
@@ -61,8 +68,126 @@ export function AIProvider({ children }: AIProviderProps) {
   
   const [currentModel, setCurrentModel] = useState<AIModelType>('gpt-4o');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [conversationHistory, setConversationHistory] = useState<Conversation[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Helper function to get AI response based on model type
+  const getAIResponse = async (conversation: Conversation, content: string, imageDataUrl?: string | null): Promise<string> => {
+    let aiResponse: string = '';
+    const startTime = Date.now();
+    let responseMetadata;
+    let rawResponse;
+    
+    try {
+      // Process based on model type
+      if (conversation.model.startsWith('gpt')) {
+        // Prepare messages including system prompt if needed
+        const messages = conversation.messages.map(({ role, content, imageUrl }) => {
+          if (imageUrl && role === 'user') {
+            // Handle images for vision models
+            return {
+              role,
+              content: [
+                { type: 'text', text: content },
+                { type: 'image_url', image_url: { url: imageUrl } }
+              ]
+            };
+          }
+          return { role, content };
+        });
+        
+        // OpenAI API call
+        const response = await openaiClient.chat.completions.create({
+          model: conversation.model,
+          messages,
+          temperature: 0.7,
+        });
+        
+        aiResponse = response.choices[0]?.message?.content || 'No response from AI';
+        rawResponse = response;
+        
+        // Extract metadata for tracking
+        const { processApiResponse } = await import('../lib/utils/responseNormalization');
+        const result = processApiResponse(conversation.model, response, startTime);
+        responseMetadata = result.metadata;
+      } else {
+        // Format messages for Gemini
+        const history = conversation.messages
+          .filter(msg => !msg.imageUrl) // Skip messages with images for non-multimodal Gemini models
+          .map(({ role, content }) => ({
+            role: role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: content }],
+          }));
+        
+        // Ensure history starts with a user message for Gemini API
+        // The Gemini API requires the first message to have role 'user'
+        const validHistory = history.length > 0 && history[0].role === 'model' 
+          ? history.slice(1) // Skip the first message if it's a model message
+          : history;
+        
+        // For multimodal requests
+        let parts = [];
+        
+        if (imageDataUrl) {
+          // Add image to parts for multimodal models
+          const imageData = imageDataUrl.split(',')[1]; // Remove the data URL prefix
+          parts = [
+            { text: content },
+            { inlineData: { mimeType: 'image/jpeg', data: imageData } }
+          ];
+        } else {
+          parts = [{ text: content }];
+        }
+        
+        // Handle different Gemini models
+        const geminiModel = conversation.model;
+        const model = genaiClient.getGenerativeModel({
+          model: geminiModel,
+          generationConfig: {
+            temperature: 0.7,
+          }
+        });
+        
+        // Choose appropriate call based on chat history
+        let response;
+        if (validHistory.length > 0) {
+          // With history
+          const chat = model.startChat({ history: validHistory });
+          response = await chat.sendMessage(parts);
+        } else {
+          // Without history (first message)
+          response = await model.generateContent(parts);
+        }
+        
+        aiResponse = response.response.text();
+        rawResponse = response;
+        
+        // Extract metadata for tracking
+        const { processApiResponse } = await import('../lib/utils/responseNormalization');
+        const result = processApiResponse(conversation.model, response, startTime);
+        responseMetadata = result.metadata;
+      }
+    } catch (error) {
+      console.error(`${conversation.model} API error:`, error);
+      
+      // Track error metadata
+      const { processApiError } = await import('../lib/utils/responseNormalization');
+      responseMetadata = processApiError(conversation.model, error, startTime);
+      
+      aiResponse = `Error: Failed to get response from the AI model. Please check your API keys and try again.`;
+    }
+    
+    // If we're in a database context, store the metadata
+    // This will be implemented when we integrate with Supabase
+    if (responseMetadata) {
+      // Store this metadata with the message when we save to database
+      console.log('Response metadata:', responseMetadata);
+    }
+    
+    return aiResponse;
+  };
 
   // Initialize API clients
   useEffect(() => {
@@ -79,33 +204,96 @@ export function AIProvider({ children }: AIProviderProps) {
           process.env.NEXT_PUBLIC_GEMINI_API_KEY || 'dummy-key'
         );
         setGenaiClient(genAI);
+        
+        setIsInitialized(true);
       } catch (error) {
         console.error('Error initializing API clients:', error);
       }
     }
   }, []);
 
+  // Load user conversations from Supabase
+  const loadUserConversations = useCallback(async () => {
+    try {
+      setIsLoadingConversations(true);
+      const { UserService } = await import('../lib/services/UserService');
+      const { ConversationService } = await import('../lib/services/ConversationService');
+      
+      // Check if user is authenticated
+      const currentUser = await UserService.getCurrentUser();
+      if (!currentUser) {
+        console.log('No authenticated user found, using in-memory conversations only.');
+        setIsLoadingConversations(false);
+        return;
+      }
+      
+      // Get user conversations from database
+      const conversations = await ConversationService.getUserConversations(currentUser.id);
+      
+      if (conversations && conversations.length > 0) {
+        setConversationHistory(conversations);
+        
+        // If we have no active conversation, set the most recent one
+        if (!currentConversation) {
+          const mostRecent = conversations[0]; // They're sorted by updated_at desc
+          setCurrentConversation(mostRecent);
+          setCurrentModel(mostRecent.model);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, [currentConversation]);
+
+  // Load user conversations on first load
+  useEffect(() => {
+    if (isInitialized) {
+      loadUserConversations();
+    }
+  }, [isInitialized, loadUserConversations]);
+
   // Create a new conversation
-  const createNewConversation = (model?: AIModelType) => {
+  const createNewConversation = async (model?: AIModelType) => {
+    const newModel = model || currentModel;
+    
     const newConversation: Conversation = {
       id: createId(),
       title: 'New Conversation',
       messages: [],
-      model: model || currentModel,
+      model: newModel,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
     
     setConversationHistory(prev => [newConversation, ...prev]);
     setCurrentConversation(newConversation);
-  };
-
-  // Select a conversation from history
-  const selectConversation = (id: string) => {
-    const conversation = conversationHistory.find(conv => conv.id === id);
-    if (conversation) {
-      setCurrentConversation(conversation);
-      setCurrentModel(conversation.model);
+    
+    try {
+      // If user is authenticated, create conversation in database
+      const { UserService } = await import('../lib/services/UserService');
+      const { ConversationService } = await import('../lib/services/ConversationService');
+      
+      const currentUser = await UserService.getCurrentUser();
+      if (currentUser) {
+        // Create in database and update local ID
+        const conversationId = await ConversationService.createConversation(
+          currentUser.id,
+          newConversation.title
+        );
+        
+        // Update the ID in our local state
+        newConversation.id = conversationId;
+        setCurrentConversation({...newConversation});
+        setConversationHistory(prev => 
+          prev.map(conv => 
+            conv.id === newConversation.id ? {...newConversation} : conv
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Error creating conversation in database:', error);
     }
   };
 
@@ -117,72 +305,34 @@ export function AIProvider({ children }: AIProviderProps) {
       return;
     }
 
+    // Get database services
+    const [UserService, MessageService] = await Promise.all([
+      import('../lib/services/UserService').then(mod => mod.UserService),
+      import('../lib/services/MessageService').then(mod => mod.MessageService)
+    ]);
+    
+    // Get current user
+    const currentUser = await UserService.getCurrentUser();
+    const userId = currentUser?.id;
+
     // Create a new conversation if one doesn't exist
     if (!currentConversation) {
-      createNewConversation();
-      
-      // We need to ensure the new conversation is created before proceeding
-      const newConversation: Conversation = {
-        id: createId(),
-        title: 'New Conversation',
-        messages: [],
-        model: currentModel,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      // Add user message to conversation
-      const userMessage: Message = imageDataUrl 
-        ? { 
-            role: 'user', 
-            content, 
-            imageUrl: imageDataUrl,
-            contentType: content.trim() ? 'text-with-image' : 'image'
-          }
-        : { role: 'user', content, contentType: 'text' };
-        
-      newConversation.messages.push(userMessage);
-      
-      setCurrentConversation(newConversation);
-      setConversationHistory(prev => [newConversation, ...prev]);
-      
-      setIsLoading(true);
-      
       try {
-        // Process AI response with the new conversation
-        let aiResponse = await getAIResponse(newConversation, content, imageDataUrl);
+        await createNewConversation();
         
-        // Add AI response to conversation
-        const assistantMessage: Message = { role: 'assistant', content: aiResponse, contentType: 'text' };
-        newConversation.messages.push(assistantMessage);
-        newConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '') || 'Image Conversation';
-        newConversation.updatedAt = new Date();
+        // Since createNewConversation is async and updates state,
+        // we need to wait for the next render cycle
+        setTimeout(() => {
+          if (currentConversation) {
+            sendMessage(content, imageDataUrl);
+          }
+        }, 100);
         
-        setCurrentConversation({...newConversation});
-        setConversationHistory(prev => 
-          prev.map(conv => conv.id === newConversation.id ? {...newConversation} : conv)
-        );
+        return;
       } catch (error) {
-        console.error('Error in sendMessage:', error);
-        
-        // Add error message to conversation
-        const errorMessage: Message = { 
-          role: 'assistant', 
-          content: `Error: Could not get a response from the AI model. Please check your API keys and try again.`,
-          contentType: 'text'
-        };
-        
-        newConversation.messages.push(errorMessage);
-        
-        setCurrentConversation({...newConversation});
-        setConversationHistory(prev => 
-          prev.map(conv => conv.id === newConversation.id ? {...newConversation} : conv)
-        );
-      } finally {
-        setIsLoading(false);
+        console.error('Error in conversation creation:', error);
+        return;
       }
-      
-      return;
     }
     
     // Add user message to existing conversation
@@ -191,9 +341,10 @@ export function AIProvider({ children }: AIProviderProps) {
           role: 'user', 
           content, 
           imageUrl: imageDataUrl,
-          contentType: content.trim() ? 'text-with-image' : 'image'
+          contentType: content.trim() ? 'text-with-image' : 'image',
+          model: currentConversation.model
         }
-      : { role: 'user', content, contentType: 'text' };
+      : { role: 'user', content, contentType: 'text', model: currentConversation.model };
       
     const updatedConversation = {
       ...currentConversation,
@@ -201,6 +352,7 @@ export function AIProvider({ children }: AIProviderProps) {
       updatedAt: new Date(),
     };
     
+    // Update state with user message
     setCurrentConversation(updatedConversation);
     setConversationHistory(prev => 
       prev.map(conv => conv.id === updatedConversation.id ? updatedConversation : conv)
@@ -208,11 +360,41 @@ export function AIProvider({ children }: AIProviderProps) {
     
     setIsLoading(true);
     
+    // Save user message to database if authenticated
+    let userMessageId: string | undefined;
+    if (userId) {
+      try {
+        userMessageId = await MessageService.createMessage(
+          currentConversation.id,
+          userMessage,
+          userId
+        );
+      } catch (error) {
+        console.error('Error saving user message:', error);
+      }
+    }
+    
     try {
+      // Track response timing
+      const startTime = Date.now();
+      
+      // Get AI response
       let aiResponse = await getAIResponse(updatedConversation, content, imageDataUrl);
       
+      // Calculate response time
+      const responseTime = Date.now() - startTime;
+      
       // Add AI response to conversation
-      const assistantMessage: Message = { role: 'assistant', content: aiResponse, contentType: 'text' };
+      const assistantMessage: Message = { 
+        role: 'assistant', 
+        content: aiResponse, 
+        contentType: 'text',
+        model: currentConversation.model,
+        metadata: {
+          response_time_ms: responseTime
+        }
+      };
+      
       const finalConversation = {
         ...updatedConversation,
         messages: [...updatedConversation.messages, assistantMessage],
@@ -222,12 +404,39 @@ export function AIProvider({ children }: AIProviderProps) {
       // Update title if this is the first exchange
       if (finalConversation.messages.length === 2 && finalConversation.title === 'New Conversation') {
         finalConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '') || 'Image Conversation';
+        
+        // Update title in database
+        if (userId) {
+          try {
+            const { ConversationService } = await import('../lib/services/ConversationService');
+            await ConversationService.updateConversationTitle(
+              currentConversation.id,
+              finalConversation.title
+            );
+          } catch (error) {
+            console.error('Error updating conversation title:', error);
+          }
+        }
       }
       
+      // Update state with assistant response
       setCurrentConversation(finalConversation);
       setConversationHistory(prev => 
         prev.map(conv => conv.id === finalConversation.id ? finalConversation : conv)
       );
+      
+      // Save assistant message to database if authenticated
+      if (userId) {
+        try {
+          const assistantMessageId = await MessageService.createMessage(
+            currentConversation.id,
+            assistantMessage,
+            userId
+          );
+        } catch (error) {
+          console.error('Error saving assistant message:', error);
+        }
+      }
     } catch (error) {
       console.error('Error in sendMessage:', error);
       
@@ -235,7 +444,8 @@ export function AIProvider({ children }: AIProviderProps) {
       const errorMessage: Message = { 
         role: 'assistant', 
         content: `Error: Could not get a response from the AI model. Please check your API keys and try again.`,
-        contentType: 'text'
+        contentType: 'text',
+        model: currentConversation.model
       };
       
       const errorConversation = {
@@ -248,139 +458,36 @@ export function AIProvider({ children }: AIProviderProps) {
       setConversationHistory(prev => 
         prev.map(conv => conv.id === errorConversation.id ? errorConversation : conv)
       );
+      
+      // Save error message to database if authenticated
+      if (userId) {
+        try {
+          const { MessageService } = await import('../lib/services/MessageService');
+          const errorMessageId = await MessageService.createMessage(
+            currentConversation.id,
+            errorMessage,
+            userId
+          );
+        } catch (dbError) {
+          console.error('Error saving error message:', dbError);
+        }
+      }
     } finally {
       setIsLoading(false);
     }
   };
-  
-  // Helper function to get AI response based on model type
-  const getAIResponse = async (conversation: Conversation, content: string, imageDataUrl?: string | null): Promise<string> => {
-    let aiResponse: string = '';
-    
-    // Get latest message (which should be the one with image if present)
-    const latestMessage = conversation.messages[conversation.messages.length - 1];
-    const hasImage = !!latestMessage.imageUrl;
-    
-    // Process based on model type
-    if (conversation.model.startsWith('gpt')) {
-      // OpenAI API call
-      try {
-        if (hasImage) {
-          // For models that support image input like gpt-4o
-          const messages = conversation.messages.map((msg) => {
-            if (msg.imageUrl && msg.role === 'user') {
-              // For messages with images
-              const content = [];
-              
-              // Add text content if exists
-              if (msg.content) {
-                content.push({
-                  type: 'text',
-                  text: msg.content
-                });
-              }
-              
-              // Add image content
-              content.push({
-                type: 'image_url',
-                image_url: {
-                  url: msg.imageUrl
-                }
-              });
-              
-              return {
-                role: msg.role,
-                content: content
-              };
-            } else {
-              // For text-only messages
-              return {
-                role: msg.role,
-                content: msg.content
-              };
-            }
-          });
-          
-          const response = await openaiClient.chat.completions.create({
-            model: conversation.model,
-            messages: messages as any,
-          });
-          
-          aiResponse = response.choices[0]?.message?.content || 'No response from AI';
-        } else {
-          // Standard text-only messages
-          const response = await openaiClient.chat.completions.create({
-            model: conversation.model,
-            messages: conversation.messages.map(({ role, content }) => ({ 
-              role: role as 'user' | 'assistant' | 'system', 
-              content 
-            })),
-          });
-          
-          aiResponse = response.choices[0]?.message?.content || 'No response from AI';
-        }
-      } catch (error) {
-        console.error('OpenAI API error:', error);
-        aiResponse = 'Error: Failed to get response from OpenAI. Please check your API key.';
-      }
-    } else {
-      // Gemini API call
-      try {
-        const geminiModel = genaiClient.getGenerativeModel({ model: conversation.model });
-        
-        if (hasImage) {
-          // For Gemini with image
-          const history = conversation.messages
-            .slice(0, -1) // Exclude the last message with image
-            .map(({ role, content }) => ({
-              role: role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: content }],
-            }));
-            
-          const chat = geminiModel.startChat({ history });
-          
-          // Create parts for the message with image
-          const parts = [];
-          if (latestMessage.content) {
-            parts.push({ text: latestMessage.content });
-          }
-          
-          if (latestMessage.imageUrl) {
-            // Extract base64 data from data URL
-            const base64Data = latestMessage.imageUrl.split(',')[1];
-            parts.push({
-              inlineData: {
-                data: base64Data,
-                mimeType: 'image/jpeg' // Assuming JPEG format
-              }
-            });
-          }
-          
-          const result = await chat.sendMessage(parts);
-          aiResponse = result.response.text();
-        } else {
-          // Standard text-only messages
-          const chat = geminiModel.startChat({
-            history: conversation.messages.map(({ role, content }) => ({
-              role: role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: content }],
-            })),
-          });
-          
-          const result = await chat.sendMessage(content);
-          aiResponse = result.response.text();
-        }
-      } catch (error) {
-        console.error('Gemini API error:', error);
-        aiResponse = 'Error: Failed to get response from Gemini. Please check your API key.';
-      }
+
+  // Select a conversation from history
+  const selectConversation = async (id: string) => {
+    const conversation = conversationHistory.find(conv => conv.id === id);
+    if (conversation) {
+      setCurrentConversation(conversation);
+      setCurrentModel(conversation.model);
     }
-    
-    return aiResponse;
   };
 
   // Switch model for the current conversation
-  const switchModel = (model: AIModelType) => {
+  const switchModel = async (model: AIModelType) => {
     setCurrentModel(model);
     
     // Update the current conversation's model if one exists
@@ -404,12 +511,14 @@ export function AIProvider({ children }: AIProviderProps) {
         currentModel,
         setCurrentModel,
         isLoading,
+        isLoadingConversations,
         currentConversation,
         conversationHistory,
         createNewConversation,
         sendMessage,
         selectConversation,
         switchModel,
+        loadUserConversations
       }}
     >
       {children}

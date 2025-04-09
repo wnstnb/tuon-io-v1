@@ -14,7 +14,19 @@ const BlockNoteEditor = dynamic(
         
         // Create editor with image upload support
         const editor = useCreateBlockNote({
-          initialContent: props.initialContent,
+          initialContent: props.initialContent && props.initialContent.length > 0 
+            ? props.initialContent 
+            : [{
+                id: "default",
+                type: "paragraph",
+                props: { 
+                  textColor: "default", 
+                  backgroundColor: "default", 
+                  textAlignment: "left" 
+                },
+                content: [],
+                children: []
+              }],
           // Add file upload handler for images
           uploadFile: async (file) => {
             // Check if file is an image
@@ -27,15 +39,52 @@ const BlockNoteEditor = dynamic(
               throw new Error('Image size should be less than 10MB');
             }
             
-            // Convert the file to a data URL
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                resolve(e.target?.result as string);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
+            try {
+              // Check if we have an artifact ID and user ID for storing in Supabase
+              if (props.artifactId && props.userId) {
+                // Import the ImageService
+                const { ImageService } = await import('../lib/services/ImageService');
+                
+                // Convert the file to a data URL first
+                const dataUrl = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = (e) => resolve(e.target?.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(file);
+                });
+                
+                // Upload the image to Supabase
+                const imageUrl = await ImageService.uploadArtifactImage(
+                  props.userId,
+                  props.artifactId,
+                  dataUrl
+                );
+                
+                // Return the public URL from Supabase
+                return imageUrl;
+              } else {
+                // Fall back to local data URL if not connected to Supabase
+                return new Promise((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = (e) => {
+                    resolve(e.target?.result as string);
+                  };
+                  reader.onerror = reject;
+                  reader.readAsDataURL(file);
+                });
+              }
+            } catch (error) {
+              console.error('Error uploading image:', error);
+              // Fall back to local data URL on error
+              return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  resolve(e.target?.result as string);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+            }
           }
         });
         
@@ -43,8 +92,17 @@ const BlockNoteEditor = dynamic(
         React.useEffect(() => {
           if (!props.onChange) return;
           
+          // Create a debounced version of the onChange handler
+          let lastChangeTime = 0;
+          const debounceInterval = 10000; // 10 seconds
+          
           const handleChange = () => {
-            props.onChange(editor.document);
+            const now = Date.now();
+            // Only call onChange if enough time has passed since last change
+            if (now - lastChangeTime >= debounceInterval) {
+              lastChangeTime = now;
+              props.onChange(editor.document);
+            }
           };
           
           editor.onChange(handleChange);
@@ -67,7 +125,7 @@ const BlockNoteEditor = dynamic(
   { ssr: false }
 );
 
-// Dynamically import theme hook with SSR disabled
+// Dynamically import theme component with SSR disabled
 const ThemeAwareEditor = dynamic(
   () => import('./ThemeAwareEditor'),
   { ssr: false }
@@ -76,15 +134,40 @@ const ThemeAwareEditor = dynamic(
 interface EditorProps {
   initialContent?: Block[];
   onChange?: (content: Block[]) => void;
+  artifactId?: string;
+  userId?: string;
 }
 
-export default function Editor({ initialContent, onChange }: EditorProps) {
+export default function Editor({ initialContent, onChange, artifactId, userId }: EditorProps) {
+  // Ensure initialContent is always an array with at least one paragraph block
+  const safeInitialContent = React.useMemo(() => {
+    if (!initialContent || !Array.isArray(initialContent) || initialContent.length === 0) {
+      // Create a properly typed empty paragraph block
+      const defaultBlock: Block = {
+        id: "default",
+        type: "paragraph",
+        props: { 
+          textColor: "default", 
+          backgroundColor: "default", 
+          textAlignment: "left" 
+        },
+        content: [],
+        children: []
+      };
+      
+      return [defaultBlock];
+    }
+    return initialContent;
+  }, [initialContent]);
+
   return (
     <div className="editor-container">
       <ThemeAwareEditor 
-        initialContent={initialContent}
+        initialContent={safeInitialContent}
         onChange={onChange}
         EditorComponent={BlockNoteEditor}
+        artifactId={artifactId}
+        userId={userId}
       />
     </div>
   );

@@ -1,11 +1,37 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAI } from '../context/AIContext';
-import { MessageSquare, Plus } from 'lucide-react';
+import { MessageSquare, Plus, Loader2 } from 'lucide-react';
 
 export default function ChatHistory() {
-  const { conversationHistory, selectConversation, createNewConversation, currentConversation } = useAI();
+  const { conversationHistory, selectConversation, createNewConversation, currentConversation, loadUserConversations } = useAI();
+  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+
+  // Load conversations when component mounts
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        setIsLoadingConversations(true);
+        await loadUserConversations();
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+      } finally {
+        setIsLoadingConversations(false);
+      }
+    };
+
+    loadConversations();
+    // We rely on the AIContext to handle reloading when needed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When conversations are loaded, update loading state
+  useEffect(() => {
+    if (conversationHistory.length > 0) {
+      setIsLoadingConversations(false);
+    }
+  }, [conversationHistory]);
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -25,7 +51,12 @@ export default function ChatHistory() {
       </button>
       
       <div className="history-list">
-        {conversationHistory.length === 0 ? (
+        {isLoadingConversations ? (
+          <div className="empty-history">
+            <Loader2 size={24} className="spinner" />
+            <p>Loading conversations...</p>
+          </div>
+        ) : conversationHistory.length === 0 ? (
           <div className="empty-history">
             <p>No conversations yet</p>
           </div>

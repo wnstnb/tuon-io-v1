@@ -5,6 +5,7 @@ import { useAI } from '../context/AIContext';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ModelSelector from './ModelSelector';
+import HistoryDropdown from './HistoryDropdown';
 import { Loader2 } from 'lucide-react';
 
 export default function ChatInterface() {
@@ -19,6 +20,7 @@ export default function ChatInterface() {
   return (
     <div className="chat-interface">
       <div className="chat-header">
+        <HistoryDropdown />
         <ModelSelector />
       </div>
       
