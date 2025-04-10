@@ -31,7 +31,7 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user || null);
         
         // If user is already logged in, redirect to editor with a slight delay
-        if (session?.user) {
+        if (session?.user && window.location.pathname === '/login') {
           console.log('User already logged in, preparing to redirect to /editor');
           // Add small delay to ensure session is fully established
           setTimeout(() => {
@@ -58,11 +58,12 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user || null);
         
         // Handle authentication events
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
           // Allow session to fully persist before navigation
           await new Promise(resolve => setTimeout(resolve, 300));
           
-          if (event === 'SIGNED_IN') {
+          // Only redirect to /editor if we're currently on the login page to prevent redirect loops
+          if (event === 'SIGNED_IN' && window.location.pathname === '/login') {
             console.log('User signed in, redirecting to /editor');
             router.push('/editor');
           }

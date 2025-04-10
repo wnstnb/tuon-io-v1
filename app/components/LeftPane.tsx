@@ -3,11 +3,15 @@
 import React, { useState } from 'react';
 import { MessageSquare, Files } from 'lucide-react';
 import ChatInterface from './ChatInterface';
+import FileExplorer from './FileExplorer';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 type Tab = 'conversation' | 'fileExplorer';
 
 export default function LeftPane() {
   const [activeTab, setActiveTab] = useState<Tab>('conversation');
+  const searchParams = useSearchParams();
+  const currentArtifactId = searchParams.get('artifactId') || undefined;
 
   return (
     <div className="left-pane-container">
@@ -38,8 +42,7 @@ export default function LeftPane() {
         )}
         {activeTab === 'fileExplorer' && (
           <div className="tab-panel">
-            {/* File Explorer content will go here */}
-            <p>File Explorer tab content</p>
+            <FileExplorer currentArtifactId={currentArtifactId} />
           </div>
         )}
       </div>

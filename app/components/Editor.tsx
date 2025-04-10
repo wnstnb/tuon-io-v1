@@ -92,24 +92,32 @@ const BlockNoteEditor = dynamic(
         React.useEffect(() => {
           if (!props.onChange) return;
           
-          // Create a debounced version of the onChange handler
-          let lastChangeTime = 0;
-          const debounceInterval = 10000; // 10 seconds
+          // Create a more effective debounce implementation
+          let debounceTimeout: NodeJS.Timeout | null = null;
+          const debounceDelay = 3000; // 3 seconds
           
           const handleChange = () => {
-            const now = Date.now();
-            // Only call onChange if enough time has passed since last change
-            if (now - lastChangeTime >= debounceInterval) {
-              lastChangeTime = now;
-              props.onChange(editor.document);
+            // Clear any existing timeout
+            if (debounceTimeout) {
+              clearTimeout(debounceTimeout);
             }
+            
+            // Set a new timeout
+            debounceTimeout = setTimeout(() => {
+              // Only update when content has meaningful changes
+              const blocks = editor.document;
+              props.onChange(blocks);
+            }, debounceDelay);
           };
           
+          // Register the handler with the editor
           editor.onChange(handleChange);
           
+          // Cleanup function
           return () => {
-            // Just remove the handler without passing null
-            // The handler will be garbage collected
+            if (debounceTimeout) {
+              clearTimeout(debounceTimeout);
+            }
           };
         }, [editor, props.onChange]);
         
@@ -117,6 +125,7 @@ const BlockNoteEditor = dynamic(
           <BlockNoteView 
             editor={editor} 
             theme={props.theme || "light"} 
+            className="bn-editor"
           />
         );
       }

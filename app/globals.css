@@ -29,6 +29,19 @@
   --success-text: #047857;
   --error-bg: #fef2f2;
   --error-text: #b91c1c;
+  /* Additional file explorer variables */
+  --bg-secondary: #f8fafc;
+  --bg-secondary-light: #f1f5f9;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --primary-color-10: rgba(0, 122, 255, 0.1);
+  --danger-color: #ef4444;
+  --danger-color-10: rgba(239, 68, 68, 0.1);
+  /* Shadow variables */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --overlay-bg: rgba(0, 0, 0, 0.6);
 }
 
 [data-theme='dark'] {
@@ -62,6 +75,19 @@
   --success-text: #d1fae5;
   --error-bg: #7f1d1d;
   --error-text: #fee2e2;
+  /* Additional file explorer variables */
+  --bg-secondary: #1a1a1a;
+  --bg-secondary-light: #242424;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --primary-color-10: rgba(10, 132, 255, 0.1);
+  --danger-color: #f87171;
+  --danger-color-10: rgba(248, 113, 113, 0.1);
+  /* Shadow variables */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --overlay-bg: rgba(0, 0, 0, 0.8);
 }
 
 * {
@@ -91,6 +117,8 @@ body {
   background-color: var(--editor-bg);
   border-radius: 0;
   box-shadow: none;
+  overflow-x: auto;
+  overflow-y: auto;
 }
 
 header {
@@ -173,7 +201,7 @@ h1 {
   height: calc(100vh - 110px);
   background-color: var(--editor-bg);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .app-container {
@@ -564,7 +592,7 @@ h1 {
   position: absolute;
   top: 5px;
   right: 5px;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: var(--overlay-bg);
   color: white;
   border: none;
   border-radius: 50%;
@@ -677,9 +705,9 @@ h1 {
   width: 100%;
   padding: 5px 10px;
   border-radius: 5px;
-  background-color: #1e1e1e;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
   font-size: 0.85rem;
   cursor: pointer;
   height: 32px;
@@ -688,12 +716,12 @@ h1 {
 
 .model-select:focus {
   outline: none;
-  border-color: #555;
+  border-color: var(--primary-color);
 }
 
 .model-select option {
-  background-color: #1e1e1e;
-  color: #fff;
+  background-color: var(--input-bg);
+  color: var(--text-color);
 }
 
 /* Chat History */
@@ -800,7 +828,7 @@ h1 {
   max-width: 400px;
   padding: 2rem;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
   background-color: var(--card-bg);
 }
 
@@ -1204,11 +1232,11 @@ h1 {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  background-color: var(--tip-bg, rgba(0, 0, 0, 0.8));
+  background-color: var(--overlay-bg);
   color: white;
   padding: 10px 16px;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-lg);
   z-index: 1000;
   max-width: 90%;
 }
@@ -1287,9 +1315,9 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #1e1e1e;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   padding: 0 10px;
   height: 32px;
@@ -1301,7 +1329,7 @@ h1 {
 }
 
 .history-button:hover {
-  border-color: #555;
+  border-color: var(--text-color-secondary);
 }
 
 .history-button-text {
@@ -1318,7 +1346,7 @@ h1 {
   background-color: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   z-index: 1000;
   padding: 12px;
   display: flex;
@@ -1422,4 +1450,75 @@ h1 {
   padding: 20px 0;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+/* BlockNote editor custom styles */
+.editor-container {
+  height: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 1rem 2rem 2rem;
+  background-color: var(--editor-bg);
+  border-radius: 0;
+  box-shadow: none;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Fix BlockNote content scrolling issues */
+.bn-container {
+  min-width: 100%;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+}
+
+.bn-editor {
+  min-width: 100%;
+  overflow-x: auto !important;
+}
+
+/* Ensure BlockNote content doesn't overflow horizontally */
+.bn-container [data-content-type="root"] {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Handle text content in editor */
+.bn-container p {
+  white-space: pre-wrap !important;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Handle code blocks in editor */
+.bn-container [data-content-type="code"] {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Custom scrollbar styling for light and dark mode */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-secondary);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) var(--bg-color);
 } 

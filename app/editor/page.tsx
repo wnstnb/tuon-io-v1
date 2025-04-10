@@ -39,7 +39,11 @@ function EditorPageContent() {
   ]);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [leftPanelSize, setLeftPanelSize] = useState(20);
-  const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(artifactId || undefined);
+  const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(() => {
+    if (artifactId) return artifactId;
+    return crypto.randomUUID();
+  });
+  const [isArtifactPersisted, setIsArtifactPersisted] = useState<boolean>(!!artifactId);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [isSaving, setIsSaving] = useState(false);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -68,6 +72,7 @@ function EditorPageContent() {
         setTitle(artifact.title);
         setEditorContent(artifact.content);
         setCurrentArtifactId(artifact.id);
+        setIsArtifactPersisted(true);
         setSaveStatus('saved');
       }
     } catch (error) {
@@ -75,36 +80,48 @@ function EditorPageContent() {
     }
   }, []);
 
-  // Create a new artifact in Supabase
+  // Create a new artifact in Supabase with the client-generated ID
   const createArtifact = useCallback(async () => {
-    if (!user) return;
+    if (!user || !currentArtifactId) return;
     
     try {
       setIsSaving(true);
       setSaveStatus('saving');
       
-      const artifactId = await ArtifactService.createArtifact(
+      const success = await ArtifactService.createArtifactWithId(
+        currentArtifactId,
         user.id,
         title,
         editorContent
       );
       
-      setCurrentArtifactId(artifactId);
-      setSaveStatus('saved');
+      if (success) {
+        setIsArtifactPersisted(true);
+        setSaveStatus('saved');
+        
+        // Update URL with the artifact ID if needed
+        if (!artifactId) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('artifactId', currentArtifactId);
+          window.history.replaceState({}, '', url.toString());
+        }
+      } else {
+        setSaveStatus('unsaved');
+      }
     } catch (error) {
       console.error('Error creating artifact:', error);
       setSaveStatus('unsaved');
     } finally {
       setIsSaving(false);
     }
-  }, [user, title, editorContent]);
+  }, [user, currentArtifactId, title, editorContent, artifactId]);
 
   // Save the current artifact to Supabase
   const saveArtifact = useCallback(async () => {
-    if (!user) return;
+    if (!user || !currentArtifactId) return;
     
-    // If no artifact ID exists, create a new one
-    if (!currentArtifactId) {
+    // If the artifact hasn't been persisted yet, create it
+    if (!isArtifactPersisted) {
       await createArtifact();
       return;
     }
@@ -127,7 +144,7 @@ function EditorPageContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [user, currentArtifactId, editorContent, createArtifact]);
+  }, [user, currentArtifactId, editorContent, createArtifact, isArtifactPersisted]);
 
   // Handle title changes with debounced save
   const handleTitleChange = useCallback(async (newTitle: string) => {
@@ -168,25 +185,29 @@ function EditorPageContent() {
     
     // Only set a new timeout if we're not already saving
     if (!isSaving) {
-      // Set a new timeout for saving with a longer debounce to reduce API calls
+      // Set a new timeout for saving with a longer debounce
+      // Coordinate with the debounce in Editor.tsx (3s) + time for processing
       const timeout = setTimeout(() => {
-        if (currentArtifactId && user) {
+        if (content.length > 0 && user) {
+          // Use a ref to track if this is the most recent save request
+          const saveTimestamp = Date.now();
           saveArtifact();
-        } else if (content.length > 0 && user) {
-          createArtifact();
         }
-      }, 5000); // Increase from 2000ms to 5000ms (5 second debounce)
+      }, 7000); // 7 second debounce (longer than Editor's debounce)
       
       setSaveTimeout(timeout);
     }
-  }, [currentArtifactId, user, saveTimeout, saveArtifact, createArtifact, isSaving]);
+  }, [user, saveTimeout, saveArtifact, isSaving]);
 
-  // Load artifact if ID is provided
+  // Load artifact if ID is provided and different from current
   useEffect(() => {
-    if (currentArtifactId && user) {
-      loadArtifact(currentArtifactId, user);
+    if (artifactId && user) {
+      // If URL contains an artifact ID, use it and load the artifact
+      setCurrentArtifactId(artifactId);
+      setIsArtifactPersisted(true);
+      loadArtifact(artifactId, user);
     }
-  }, [currentArtifactId, user, loadArtifact]);
+  }, [artifactId, user, loadArtifact]);
 
   // Memoize editor props to prevent unnecessary re-renders
   const editorProps = useMemo(() => ({

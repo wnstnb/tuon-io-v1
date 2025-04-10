@@ -4,6 +4,7 @@ import React from 'react';
 import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
 import './globals.css';
+import './styles/components/file-explorer.css';
 import ClientProviders from './context/ClientProviders';
 
 const inter = Inter({ subsets: ['latin'] });
