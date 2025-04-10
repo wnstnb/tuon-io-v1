@@ -75,6 +75,7 @@ interface AIContextType {
   currentConversation: Conversation | null;
   conversationHistory: Conversation[];
   searchHistory: SearchHistoryItem[];
+  setSearchHistory: React.Dispatch<React.SetStateAction<SearchHistoryItem[]>>;
   createNewConversation: (model?: AIModelType) => void;
   sendMessage: (content: string, imageDataUrl?: string | null, editorContext?: EditorContext, searchOptions?: SearchOptions) => Promise<void>;
   selectConversation: (id: string) => void;
@@ -606,6 +607,7 @@ export function AIProvider({ children }: AIProviderProps) {
         currentConversation,
         conversationHistory,
         searchHistory,
+        setSearchHistory,
         createNewConversation,
         sendMessage,
         selectConversation,

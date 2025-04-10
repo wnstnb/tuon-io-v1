@@ -3,12 +3,13 @@
 import React, { useState } from 'react';
 import { Search, ExternalLink } from 'lucide-react';
 import { useAI, SearchHistoryItem, SearchResult } from '../context/AIContext';
+import WebSearchInput from './WebSearchInput';
 
 type Tab = 'search';
 
 export default function RightPane() {
   const [activeTab, setActiveTab] = useState<Tab>('search');
-  const { searchHistory } = useAI();
+  const { searchHistory, setSearchHistory } = useAI();
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleString('en-US', {
@@ -17,6 +18,20 @@ export default function RightPane() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Handler for when a search is completed via WebSearchInput
+  const handleSearchComplete = (results: SearchResult[], query: string) => {
+    // Create a new search history item
+    const searchItem: SearchHistoryItem = {
+      id: Date.now().toString(), // Simple ID generation
+      query,
+      results,
+      timestamp: new Date()
+    };
+    
+    // Update the search history
+    setSearchHistory(prev => [searchItem, ...prev]);
   };
 
   return (
@@ -36,6 +51,12 @@ export default function RightPane() {
       <div className="tab-content">
         {activeTab === 'search' && (
           <div className="tab-panel">
+            {/* Add the WebSearchInput component at the top */}
+            <div className="web-search-container">
+              <WebSearchInput onSearchComplete={handleSearchComplete} />
+            </div>
+            
+            {/* Show search history */}
             {searchHistory.length > 0 ? (
               <div className="search-history">
                 {searchHistory.map((item) => (
@@ -67,7 +88,7 @@ export default function RightPane() {
               </div>
             ) : (
               <div className="search-placeholder">
-                <span>No search history yet. Try searching with /search [query]</span>
+                <span>No search history yet. Try searching in the box above.</span>
               </div>
             )}
           </div>

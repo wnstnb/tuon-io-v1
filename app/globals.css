@@ -1862,4 +1862,69 @@ html.dark .ai-status-indicator {
 /* Content panel transition */
 [data-panel-id="content-panel"] {
   transition: flex-basis 0.3s ease;
+}
+
+/* Web Search Input Styles */
+.web-search-container {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.web-search-input {
+  width: 100%;
+}
+
+.search-input-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background-color: var(--bg-color);
+  overflow: hidden;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-color-secondary);
+}
+
+.search-input {
+  flex-grow: 1;
+  height: 2.5rem;
+  padding: 0.5rem 0.5rem 0.5rem 2.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+.search-button {
+  height: 2.5rem;
+  padding: 0 1rem;
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.search-button:hover {
+  background-color: var(--primary-color-hover);
+}
+
+.search-button:disabled {
+  background-color: var(--border-color);
+  cursor: not-allowed;
+}
+
+.search-error {
+  margin-top: 0.5rem;
+  color: var(--error-color);
+  font-size: 0.75rem;
 } 
