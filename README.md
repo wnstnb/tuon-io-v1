@@ -24,7 +24,12 @@ AI-powered content creation and management platform that stores your content in 
 
 3. Set up environment variables:
    - Copy `.env.local.example` to `.env.local`
-   - Add your API keys and credentials
+   - Add your API keys and credentials:
+     - OpenAI API key for GPT models
+     - Google API key for Gemini models
+     - Supabase credentials
+     - ExaSearch API key (for semantic search)
+     - S3-compatible storage credentials
 
 ### Supabase Setup
 
@@ -35,6 +40,8 @@ AI-powered content creation and management platform that stores your content in 
    - Go to Authentication > Providers
    - Enable Email OTP (One-Time Password) provider
    - Configure your email service provider (SMTP) for sending emails
+5. Set up storage buckets for image uploads:
+   - Create buckets for 'user_uploads' and 'user_avatars'
 
 ### Start Development Server
 
@@ -44,20 +51,60 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Application Overview
+
+Tuon.io features a three-pane layout designed for efficient content creation:
+
+1. **Left Pane (Productivity)**: Access to conversations and file explorer
+2. **Center Pane (Artifact Editor)**: Rich text editor for content creation
+3. **Right Pane (Web Search)**: Integration for research capabilities
+
+### Key Features
+
+- **Smart AI Content Creation**: AI analyzes your intent to determine whether to respond in chat or edit the document
+- **Multi-model Support**: Switch between OpenAI (GPT-4o, GPT-o3-mini) and Google (Gemini 2.0, 2.5) models
+- **Content Management**: Organize artifacts with automatic tagging and filing
+- **Rich Text Editing**: Full-featured document editor with image support
+- **Vector Search**: Semantic search across your content
+
 ## Project Structure
 
 - `/app` - Next.js app directory
-  - `/components` - React components
-  - `/context` - React context providers
+  - `/components` - React components (Editor, Chat, UI elements)
+  - `/context` - React context providers (AI, Theme, Supabase)
   - `/auth` - Authentication related routes
   - `/editor` - Editor page
   - `/login` - Authentication page
   - `/lib` - Utilities and API clients
+    - `/services` - Core services (Intent, Creator, Artifact, etc.)
+    - `/utils` - Helper utilities
 
 ## Tech Stack
 
-- Next.js (App Router)
-- React
-- Supabase (Auth & Database)
-- BlockNote (Editor)
-- OpenAI & Gemini (AI Models)
+- **Frontend**: Next.js (App Router), React 19, TypeScript
+- **Database**: Supabase (PostgreSQL with pgvector)
+- **Authentication**: Supabase Auth
+- **Editor**: BlockNote
+- **AI Integration**: OpenAI & Google Generative AI APIs
+- **Search**: ExaSearch & vector embeddings
+- **Storage**: S3-compatible storage for media
+
+## Core Services
+
+- **Intent Analysis**: Determines how AI should respond to user queries
+- **Creator Agent**: Formats AI responses for either conversation or editor
+- **Artifact Management**: Handles content storage and organization
+- **Image Service**: Manages image uploads and retrieval
+
+## Database Schema
+
+The application uses a comprehensive schema including:
+
+- Users
+- Artifacts (content items)
+- Tags and artifact tagging
+- Conversations and messages
+- User feedback
+- Custom instructions
+
+Row-level security policies ensure that users can only access their own data.
