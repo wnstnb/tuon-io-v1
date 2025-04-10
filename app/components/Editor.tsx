@@ -222,6 +222,12 @@ export default function Editor({ initialContent, onChange, artifactId, userId, o
             break;
         }
         
+        // Trigger save immediately after AI content is applied to the editor
+        if (onChange) {
+          console.log('Editor: Triggering autosave after AI content insertion');
+          onChange(blocks);
+        }
+        
         // Clear status after a delay
         setTimeout(() => {
           setAiStatus({ isProcessing: false });

@@ -7,6 +7,7 @@ import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import Editor from '../components/Editor';
 import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
+import RightPane from '../components/RightPane';
 import { type Block } from "@blocknote/core";
 import { ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
@@ -39,6 +40,8 @@ function EditorPageContent() {
   ]);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [leftPanelSize, setLeftPanelSize] = useState(20);
+  const [showRightPanel, setShowRightPanel] = useState(false);
+  const [rightPanelSize, setRightPanelSize] = useState(20);
   const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(() => {
     if (artifactId) return artifactId;
     return crypto.randomUUID();
@@ -53,15 +56,27 @@ function EditorPageContent() {
     setShowLeftPanel(!showLeftPanel);
   }, [showLeftPanel]);
 
+  const toggleRightPanel = useCallback(() => {
+    setShowRightPanel(!showRightPanel);
+  }, [showRightPanel]);
+
   const handlePanelResize = useCallback((sizes: number[]) => {
     if (sizes.length > 0) {
       // Only update if the size is different to avoid unnecessary re-renders
       if (Math.abs(sizes[0] - leftPanelSize) > 0.5) {
         setLeftPanelSize(sizes[0]);
-        console.log('Panel resized to:', sizes[0]);
+        console.log('Left panel resized to:', sizes[0]);
+      }
+      
+      // If right panel is visible, update its size
+      if (showRightPanel && sizes.length > 2) {
+        if (Math.abs(sizes[2] - rightPanelSize) > 0.5) {
+          setRightPanelSize(sizes[2]);
+          console.log('Right panel resized to:', sizes[2]);
+        }
       }
     }
-  }, [leftPanelSize]);
+  }, [leftPanelSize, rightPanelSize, showRightPanel]);
 
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (artifactId: string, user: User) => {
@@ -308,7 +323,7 @@ function EditorPageContent() {
                 <LeftPane />
               </Panel>
               <PanelResizeHandle 
-                id="resize-handle" 
+                id="left-resize-handle" 
                 className="resize-handle"
               >
                 <div className="resize-line"></div>
@@ -345,8 +360,45 @@ function EditorPageContent() {
                 key={`editor-instance-${currentArtifactId}`}
                 {...editorProps}
               />
+              {!showRightPanel && (
+                <button
+                  onClick={toggleRightPanel}
+                  className="toggle-button toggle-button-right"
+                  aria-label="Expand right panel"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              )}
             </div>
           </Panel>
+          {showRightPanel && (
+            <>
+              <PanelResizeHandle 
+                id="right-resize-handle" 
+                className="resize-handle"
+              >
+                <div className="resize-line"></div>
+                <button 
+                  onClick={toggleRightPanel}
+                  className="toggle-button"
+                  aria-label="Collapse right panel"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </PanelResizeHandle>
+              <Panel 
+                id="right-panel" 
+                defaultSize={rightPanelSize}
+                minSize={10}
+                maxSize={40}
+                order={3}
+                className="animated-panel right-panel"
+                collapsible={false}
+              >
+                <RightPane />
+              </Panel>
+            </>
+          )}
         </PanelGroup>
       </div>
     </main>

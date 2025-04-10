@@ -356,7 +356,6 @@ h1 {
   cursor: pointer;
   z-index: 100;
   transition: all 0.3s ease;
-  top: 20px;
 }
 
 .toggle-button:hover {
@@ -366,14 +365,38 @@ h1 {
 
 /* Toggle button on resize handle */
 .resize-handle .toggle-button {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Left resize handle button */
+#left-resize-handle .toggle-button {
   right: -12px;
 }
 
-/* Toggle button when panel is collapsed */
+/* Right resize handle button */
+#right-resize-handle .toggle-button {
+  left: -12px;
+}
+
+/* Toggle button when left panel is collapsed */
 .toggle-button-left {
   position: absolute;
-  left: 10px;
-  top: 20px;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Toggle button for right pane */
+.toggle-button-right {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 /* Panel specific styles */
@@ -1582,4 +1605,42 @@ h1 {
 html.dark .ai-status-indicator {
   background-color: rgba(255, 255, 255, 0.15);
   color: white;
+}
+
+/* Right panel styles */
+.right-panel {
+  width: 100% !important;
+  min-width: 200px;
+  max-width: 40%;
+  overflow: hidden;
+}
+
+[data-panel-id="right-panel"] {
+  width: 100%;
+  height: 100%;
+}
+
+[data-panel-id="right-panel"] > div {
+  width: 100%;
+  height: 100%;
+}
+
+.right-pane-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  border-left: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+/* Search placeholder styling */
+.search-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-color-secondary);
+  text-align: center;
+  padding: 20px;
 } 
