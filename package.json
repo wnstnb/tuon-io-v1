@@ -25,6 +25,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@types/react-transition-group": "^4.4.12",
+    "exa-js": "^1.5.13",
     "lucide-react": "^0.487.0",
     "next": "^15.2.4",
     "openai": "^4.93.0",

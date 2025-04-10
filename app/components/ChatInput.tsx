@@ -3,19 +3,21 @@
 import React, { useState, FormEvent, useRef, useEffect } from 'react';
 import { Send, Image } from 'lucide-react';
 import { useAI, EditorContext } from '../context/AIContext';
+import { Block } from '@blocknote/core';
 
 // Optional prop to receive editor context from parent components
 interface ChatInputProps {
   editorContext?: EditorContext;
 }
 
-export default function ChatInput({ editorContext }: ChatInputProps = {}) {
+export default function ChatInput({ editorContext: initialEditorContext }: ChatInputProps = {}) {
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const { sendMessage, isLoading } = useAI();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [capturedEditorContent, setCapturedEditorContent] = useState<Block[] | undefined>(undefined);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -118,6 +120,35 @@ export default function ChatInput({ editorContext }: ChatInputProps = {}) {
     }
   };
 
+  // Function to request editor content
+  const requestEditorContent = () => {
+    return new Promise<Block[] | undefined>((resolve) => {
+      // Set up a one-time listener for the response
+      const handleContentResponse = (event: CustomEvent) => {
+        if (event.detail && event.detail.content) {
+          setCapturedEditorContent(event.detail.content);
+          resolve(event.detail.content);
+        } else {
+          resolve(undefined);
+        }
+        window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
+      };
+      
+      // Listen for the response
+      window.addEventListener('editor:contentResponse', handleContentResponse as EventListener);
+      
+      // Request the content
+      const requestEvent = new CustomEvent('editor:requestContent');
+      window.dispatchEvent(requestEvent);
+      
+      // Set a timeout in case we don't get a response
+      setTimeout(() => {
+        window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
+        resolve(undefined);
+      }, 500);
+    });
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     
@@ -131,18 +162,30 @@ export default function ChatInput({ editorContext }: ChatInputProps = {}) {
       textareaRef.current.style.height = 'auto';
     }
     
+    // Capture current editor content before sending message
+    const editorContent = await requestEditorContent();
+    
+    // Prepare enhanced editor context with current content
+    const enhancedEditorContext: EditorContext = {
+      ...initialEditorContext,
+      editorContent: editorContent
+    };
+    
     // Log editor context for debugging
-    if (editorContext) {
-      console.log('Sending message with editor context:', editorContext);
+    if (enhancedEditorContext) {
+      console.log('Sending message with enhanced editor context:', {
+        ...enhancedEditorContext,
+        editorContent: editorContent ? `[${editorContent.length} blocks]` : 'none'
+      });
     }
     
     // Handle message with image
     if (selectedImage) {
       const imageDataUrl = imagePreview;
       clearSelectedImage();
-      await sendMessage(userMessage, imageDataUrl, editorContext);
+      await sendMessage(userMessage, imageDataUrl, enhancedEditorContext);
     } else {
-      await sendMessage(userMessage, null, editorContext);
+      await sendMessage(userMessage, null, enhancedEditorContext);
     }
   };
 

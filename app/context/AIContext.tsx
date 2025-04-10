@@ -1,8 +1,9 @@
 'use client';
 
 import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback } from 'react';
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Block } from "@blocknote/core";
 
 // Define supported AI models
 export type AIModelType = 
@@ -39,6 +40,8 @@ export interface EditorContext {
   currentFile?: string;
   selection?: string;
   cursorPosition?: number;
+  editorContent?: Block[];  // Full document content from the editor
+  selectedBlockIds?: string[]; // IDs of any selected blocks
 }
 
 // Define AI context type
@@ -324,17 +327,18 @@ export function AIProvider({ children }: AIProviderProps) {
     imageDataUrl?: string | null,
     editorContext?: EditorContext
   ) => {
-    // Check if API clients are initialized
+    // Check if API clients 
     if (!openaiClient || !genaiClient) {
       console.error('API clients not initialized yet');
       return;
     }
 
     // Get database services
-    const [UserService, MessageService, IntentAgentService] = await Promise.all([
+    const [UserService, MessageService, IntentAgentService, CreatorAgentService] = await Promise.all([
       import('../lib/services/UserService').then(mod => mod.UserService),
       import('../lib/services/MessageService').then(mod => mod.MessageService),
-      import('../lib/services/IntentAgentService').then(mod => mod.IntentAgentService)
+      import('../lib/services/IntentAgentService').then(mod => mod.IntentAgentService),
+      import('../lib/services/CreatorAgentService').then(mod => mod.CreatorAgentService)
     ]);
     
     // Get current user
@@ -409,8 +413,15 @@ export function AIProvider({ children }: AIProviderProps) {
       const intentAnalysis = await IntentAgentService.analyzeIntent(content, editorContext);
       console.log('Intent analysis result:', intentAnalysis);
       
-      // Get AI response
-      let aiResponse = await getAIResponse(updatedConversation, content, imageDataUrl);
+      // Get AI response via the creator agent
+      console.log('Processing request with creator agent...');
+      const creatorResponse = await CreatorAgentService.processRequest(
+        content,
+        intentAnalysis,
+        updatedConversation.messages.slice(-5), // Pass the last 5 messages for context
+        editorContext?.editorContent // Pass editor content if available
+      );
+      console.log('Creator agent response:', creatorResponse);
       
       // Calculate response time
       const responseTime = Date.now() - startTime;
@@ -418,12 +429,13 @@ export function AIProvider({ children }: AIProviderProps) {
       // Add AI response to conversation
       const assistantMessage: Message = { 
         role: 'assistant', 
-        content: aiResponse, 
+        content: creatorResponse.chatContent, // Use chat content from creator
         contentType: 'text',
         model: currentConversation.model,
         metadata: {
           response_time_ms: responseTime,
-          intent_analysis: intentAnalysis // Include intent analysis in metadata
+          intent_analysis: intentAnalysis, // Include intent analysis in metadata
+          has_editor_content: !!creatorResponse.editorContent // Flag if there's editor content
         }
       };
       
@@ -470,15 +482,36 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       }
       
-      // Handle routing based on intent analysis
-      if (intentAnalysis.destination === 'EDITOR') {
-        // This is where we would dispatch an event or call a function to update the editor
-        console.log('EDITOR DESTINATION DETECTED: AI output should go to the editor');
+      // Handle routing based on intent analysis and creator agent response
+      if (intentAnalysis.destination === 'EDITOR' && creatorResponse.editorContent) {
+        // This is where we dispatch an event or call a function to update the editor
+        console.log('EDITOR DESTINATION DETECTED: AI output will go to the editor');
         console.log('Editor metadata:', intentAnalysis.metadata);
+        console.log('Editor content blocks:', creatorResponse.editorContent.length);
         
-        // For now, just log that this would be sent to the editor
-        // The actual implementation of editor integration will come next
-        // This could dispatch an event, call a callback, etc.
+        // Determine operation type based on context
+        let operationType = 'REPLACE'; // Default operation
+        
+        if (editorContext?.editorContent && editorContext.editorContent.length > 0) {
+          // If we had existing content, this is likely a modification
+          // The specific type of operation could be inferred from intent or metadata
+          operationType = intentAnalysis.metadata?.editorAction || 'MODIFY';
+        } else {
+          // If there was no existing content, this is a creation operation
+          operationType = 'CREATE';
+        }
+        
+        // Emit a custom event that the editor component can listen for
+        const editorUpdateEvent = new CustomEvent('editor:update', {
+          detail: {
+            blocks: creatorResponse.editorContent,
+            metadata: intentAnalysis.metadata,
+            operation: operationType,
+            userInput: content, // Include the user's original request for context
+            hadPriorContent: !!(editorContext?.editorContent && editorContext.editorContent.length > 0)
+          }
+        });
+        window.dispatchEvent(editorUpdateEvent);
       } else {
         console.log('CONVERSATION DESTINATION DETECTED: AI output staying in conversation pane');
         // Normal conversation flow continues as is

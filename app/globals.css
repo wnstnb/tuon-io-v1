@@ -1545,4 +1545,41 @@ h1 {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) var(--bg-color);
+}
+
+/* AI Status Indicator */
+.ai-status-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 100;
+  animation: fadeInOut 0.3s ease-in-out;
+}
+
+.ai-status-icon {
+  animation: spin 1s infinite linear;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Dark theme adjustment */
+html.dark .ai-status-indicator {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
 } 
