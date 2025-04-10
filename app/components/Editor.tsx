@@ -149,6 +149,11 @@ interface EditorProps {
 }
 
 export default function Editor({ initialContent, onChange, artifactId, userId }: EditorProps) {
+  // Debugging log to verify when props change
+  React.useEffect(() => {
+    console.log(`Editor received new content for artifact: ${artifactId}`);
+  }, [initialContent, artifactId]);
+  
   // Ensure initialContent is always an array with at least one paragraph block
   const safeInitialContent = React.useMemo(() => {
     if (!initialContent || !Array.isArray(initialContent) || initialContent.length === 0) {
@@ -173,7 +178,8 @@ export default function Editor({ initialContent, onChange, artifactId, userId }:
   return (
     <div className="editor-container">
       <ThemeAwareEditor 
-        key={`theme-editor-${artifactId}`}
+        // Create a more specific key that will force a remount when content changes
+        key={`editor-${artifactId}-${initialContent ? initialContent.length : 'empty'}-${Date.now()}`}
         initialContent={safeInitialContent}
         onChange={onChange}
         EditorComponent={BlockNoteEditor}

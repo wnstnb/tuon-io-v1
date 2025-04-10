@@ -75,10 +75,19 @@ export default function FileExplorer({ currentArtifactId }: FileExplorerProps) {
     } else {
       // In normal mode, navigate to the artifact
       console.log(`Navigating to artifact: ${artifactId}`);
-      // Use replace instead of push to ensure a clean navigation
-      router.replace(`/editor?artifactId=${artifactId}`);
       
-      // Also update the local selection state
+      // Update the URL without triggering a full page reload
+      const url = new URL(window.location.href);
+      url.searchParams.set('artifactId', artifactId);
+      window.history.pushState({}, '', url.toString());
+      
+      // Also dispatch a custom event to notify the editor to load this artifact
+      const event = new CustomEvent('artifactSelected', { 
+        detail: { artifactId }
+      });
+      window.dispatchEvent(event);
+      
+      // Update the local selection state
       setSelectedArtifactId(artifactId);
     }
   };

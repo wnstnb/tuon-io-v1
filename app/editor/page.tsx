@@ -213,24 +213,50 @@ function EditorPageContent() {
     }
   }, [user, saveTimeout, saveArtifact, isSaving]);
 
-  // Load artifact if ID is provided and different from current
+  // Listen for artifact selection events from FileExplorer
   useEffect(() => {
-    if (artifactId && user) {
-      console.log(`Loading artifact with ID: ${artifactId}`);
-      // If URL contains an artifact ID, use it and load the artifact
+    // Handler function to load artifact when selected from FileExplorer
+    const handleArtifactSelected = (event: CustomEvent) => {
+      const { artifactId } = event.detail;
+      if (artifactId && user && artifactId !== currentArtifactId) {
+        console.log(`Loading artifact from event: ${artifactId}`);
+        setCurrentArtifactId(artifactId);
+        setIsArtifactPersisted(true);
+        loadArtifact(artifactId, user);
+      }
+    };
+
+    // Add event listener for custom event
+    window.addEventListener('artifactSelected', handleArtifactSelected as EventListener);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
+    };
+  }, [user, loadArtifact, currentArtifactId]);
+
+  // Load artifact if ID is provided in URL and different from current
+  useEffect(() => {
+    if (artifactId && user && artifactId !== currentArtifactId) {
+      console.log(`Loading artifact from URL: ${artifactId}`);
       setCurrentArtifactId(artifactId);
       setIsArtifactPersisted(true);
       loadArtifact(artifactId, user);
     }
-  }, [artifactId, user, loadArtifact]);
+  }, [artifactId, user, loadArtifact, currentArtifactId]);
 
   // Memoize editor props to prevent unnecessary re-renders
-  const editorProps = useMemo(() => ({
-    initialContent: editorContent,
-    onChange: handleContentChange,
-    artifactId: currentArtifactId,
-    userId: user?.id
-  }), [editorContent, handleContentChange, currentArtifactId, user?.id]);
+  const editorProps = useMemo(() => {
+    console.log('Updating editor props with new content');
+    return {
+      initialContent: editorContent,
+      onChange: handleContentChange,
+      artifactId: currentArtifactId,
+      userId: user?.id,
+      // Adding a timestamp forces re-evaluation when content changes
+      _forceUpdate: Date.now()
+    };
+  }, [editorContent, handleContentChange, currentArtifactId, user?.id]);
 
   // Show a loading state if user data is still loading
   if (isLoading) {

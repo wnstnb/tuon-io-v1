@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Plus, X, FilePlus, Copy, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ArtifactService } from '../lib/services/ArtifactService';
+import { useSupabase } from '../context/SupabaseContext';
 
 interface EditorFABProps {
   artifactId?: string;
@@ -14,19 +15,22 @@ interface EditorFABProps {
 export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const router = useRouter();
+  const { user: supabaseUser } = useSupabase();
+  // Use either passed userId or get it from context
+  const effectiveUserId = userId || supabaseUser?.id;
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
   };
 
   const handleNewArtifact = async () => {
-    if (!userId) {
+    if (!effectiveUserId) {
       alert('You must be logged in to create a new artifact');
       return;
     }
 
     try {
-      const newArtifactId = await ArtifactService.createArtifact(userId, 'Untitled Artifact');
+      const newArtifactId = await ArtifactService.createArtifact(effectiveUserId, 'Untitled Artifact');
       if (newArtifactId) {
         router.push(`/editor?artifactId=${newArtifactId}`);
       }
@@ -39,7 +43,7 @@ export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABPro
   };
 
   const handleDuplicateArtifact = async () => {
-    if (!userId || !artifactId) {
+    if (!effectiveUserId || !artifactId) {
       alert('Cannot duplicate: No artifact is currently open');
       return;
     }
