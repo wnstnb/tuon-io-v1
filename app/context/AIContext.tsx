@@ -25,6 +25,22 @@ export interface Message {
   created_at?: Date;  // Timestamp from database
 }
 
+// Define search result interface
+export interface SearchResult {
+  title: string;
+  url: string;
+  text: string;
+  score?: number;
+}
+
+// Define search history item interface
+export interface SearchHistoryItem {
+  id: string;
+  query: string;
+  results: SearchResult[];
+  timestamp: Date;
+}
+
 // Define conversation type
 export interface Conversation {
   id: string;
@@ -44,6 +60,12 @@ export interface EditorContext {
   selectedBlockIds?: string[]; // IDs of any selected blocks
 }
 
+// Define search options type
+export interface SearchOptions {
+  isSearch: boolean;
+  searchQuery: string;
+}
+
 // Define AI context type
 interface AIContextType {
   currentModel: AIModelType;
@@ -52,8 +74,9 @@ interface AIContextType {
   isLoadingConversations: boolean;  // Add loading state for conversations
   currentConversation: Conversation | null;
   conversationHistory: Conversation[];
+  searchHistory: SearchHistoryItem[];
   createNewConversation: (model?: AIModelType) => void;
-  sendMessage: (content: string, imageDataUrl?: string | null, editorContext?: EditorContext) => Promise<void>;
+  sendMessage: (content: string, imageDataUrl?: string | null, editorContext?: EditorContext, searchOptions?: SearchOptions) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
   loadUserConversations: () => Promise<void>;
@@ -81,6 +104,7 @@ export function AIProvider({ children }: AIProviderProps) {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [conversationHistory, setConversationHistory] = useState<Conversation[]>([]);
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Helper function to get AI response based on model type
@@ -325,235 +349,215 @@ export function AIProvider({ children }: AIProviderProps) {
   const sendMessage = async (
     content: string, 
     imageDataUrl?: string | null,
-    editorContext?: EditorContext
+    editorContext?: EditorContext,
+    searchOptions?: SearchOptions
   ) => {
-    // Check if API clients 
-    if (!openaiClient || !genaiClient) {
-      console.error('API clients not initialized yet');
-      return;
-    }
-
-    // Get database services
-    const [UserService, MessageService, IntentAgentService, CreatorAgentService] = await Promise.all([
-      import('../lib/services/UserService').then(mod => mod.UserService),
-      import('../lib/services/MessageService').then(mod => mod.MessageService),
-      import('../lib/services/IntentAgentService').then(mod => mod.IntentAgentService),
-      import('../lib/services/CreatorAgentService').then(mod => mod.CreatorAgentService)
-    ]);
-    
-    // Get current user
-    const currentUser = await UserService.getCurrentUser();
-    const userId = currentUser?.id;
-
-    // Create a new conversation if one doesn't exist
-    if (!currentConversation) {
-      try {
-        await createNewConversation();
-        
-        // Since createNewConversation is async and updates state,
-        // we need to wait for the next render cycle
-        setTimeout(() => {
-          if (currentConversation) {
-            sendMessage(content, imageDataUrl, editorContext);
-          }
-        }, 100);
-        
-        return;
-      } catch (error) {
-        console.error('Error in conversation creation:', error);
-        return;
-      }
-    }
-    
-    // Add user message to existing conversation
-    const userMessage: Message = imageDataUrl 
-      ? { 
-          role: 'user', 
-          content, 
-          imageUrl: imageDataUrl,
-          contentType: content.trim() ? 'text-with-image' : 'image',
-          model: currentConversation.model
-        }
-      : { role: 'user', content, contentType: 'text', model: currentConversation.model };
-      
-    const updatedConversation = {
-      ...currentConversation,
-      messages: [...currentConversation.messages, userMessage],
-      updatedAt: new Date(),
-    };
-    
-    // Update state with user message
-    setCurrentConversation(updatedConversation);
-    setConversationHistory(prev => 
-      prev.map(conv => conv.id === updatedConversation.id ? updatedConversation : conv)
-    );
-    
-    setIsLoading(true);
-    
-    // Save user message to database if authenticated
-    let userMessageId: string | undefined;
-    if (userId) {
-      try {
-        userMessageId = await MessageService.createMessage(
-          currentConversation.id,
-          userMessage,
-          userId
-        );
-      } catch (error) {
-        console.error('Error saving user message:', error);
-      }
-    }
+    if (!currentConversation) return;
     
     try {
-      // Track response timing
-      const startTime = Date.now();
+      setIsLoading(true);
       
-      // Analyze user intent first to determine if this should go to editor
-      console.log('Analyzing user intent...');
-      const intentAnalysis = await IntentAgentService.analyzeIntent(content, editorContext);
-      console.log('Intent analysis result:', intentAnalysis);
+      // Clone current conversation to avoid mutation issues
+      const updatedConversation = { ...currentConversation };
       
-      // Get AI response via the creator agent
-      console.log('Processing request with creator agent...');
-      const creatorResponse = await CreatorAgentService.processRequest(
-        content,
-        intentAnalysis,
-        updatedConversation.messages.slice(-5), // Pass the last 5 messages for context
-        editorContext?.editorContent // Pass editor content if available
-      );
-      console.log('Creator agent response:', creatorResponse);
-      
-      // Calculate response time
-      const responseTime = Date.now() - startTime;
-      
-      // Add AI response to conversation
-      const assistantMessage: Message = { 
-        role: 'assistant', 
-        content: creatorResponse.chatContent, // Use chat content from creator
-        contentType: 'text',
-        model: currentConversation.model,
-        metadata: {
-          response_time_ms: responseTime,
-          intent_analysis: intentAnalysis, // Include intent analysis in metadata
-          has_editor_content: !!creatorResponse.editorContent // Flag if there's editor content
+      // Add user message to conversation
+      updatedConversation.messages = [
+        ...updatedConversation.messages,
+        {
+          role: 'user',
+          content,
+          contentType: imageDataUrl ? 'text-with-image' : 'text',
+          imageUrl: undefined, // Initialize as undefined instead of null
         }
-      };
+      ];
       
-      const finalConversation = {
-        ...updatedConversation,
-        messages: [...updatedConversation.messages, assistantMessage],
-        updatedAt: new Date(),
-      };
-      
-      // Update title if this is the first exchange
-      if (finalConversation.messages.length === 2 && finalConversation.title === 'New Conversation') {
-        finalConversation.title = content.substring(0, 30) + (content.length > 30 ? '...' : '') || 'Image Conversation';
-        
-        // Update title in database
-        if (userId) {
-          try {
-            const { ConversationService } = await import('../lib/services/ConversationService');
-            await ConversationService.updateConversationTitle(
-              currentConversation.id,
-              finalConversation.title
-            );
-          } catch (error) {
-            console.error('Error updating conversation title:', error);
-          }
-        }
-      }
-      
-      // Update state with assistant response
-      setCurrentConversation(finalConversation);
-      setConversationHistory(prev => 
-        prev.map(conv => conv.id === finalConversation.id ? finalConversation : conv)
-      );
-      
-      // Save assistant message to database if authenticated
-      if (userId) {
+      // Handle image upload if provided
+      if (imageDataUrl) {
+        // Import image service dynamically
+        const { ImageService } = await import('../lib/services/ImageService');
         try {
-          const assistantMessageId = await MessageService.createMessage(
-            currentConversation.id,
-            assistantMessage,
-            userId
+          // Extract base64 data from data URL
+          const base64Data = imageDataUrl.split(',')[1];
+          
+          // Get current user ID for the upload
+          const { UserService } = await import('../lib/services/UserService');
+          const currentUser = await UserService.getCurrentUser();
+          
+          if (!currentUser || !currentUser.id) {
+            console.error('Cannot upload image: No authenticated user');
+            throw new Error('User authentication required to upload images');
+          }
+          
+          // Upload the image and get the path/URL
+          const imagePath = await ImageService.uploadImage(
+            currentUser.id,
+            imageDataUrl, // Pass the full data URL, the service will handle extraction
+            'conversation-images',
+            currentConversation.id // Use conversation ID as the path
           );
+          console.log('Image uploaded successfully:', imagePath);
+          
+          // Update the user message with the image URL/path
+          updatedConversation.messages[updatedConversation.messages.length - 1].imageUrl = imagePath;
         } catch (error) {
-          console.error('Error saving assistant message:', error);
+          console.error('Error uploading image:', error);
         }
       }
       
-      // Handle routing based on intent analysis and creator agent response
-      if (intentAnalysis.destination === 'EDITOR' && creatorResponse.editorContent) {
-        // This is where we dispatch an event or call a function to update the editor
-        console.log('EDITOR DESTINATION DETECTED: AI output will go to the editor');
-        console.log('Editor metadata:', intentAnalysis.metadata);
-        console.log('Editor content blocks:', creatorResponse.editorContent.length);
+      // Update conversation in state
+      setCurrentConversation(updatedConversation);
+      updateConversationInHistory(updatedConversation);
+      
+      // Handle explicit search requests from /search command
+      let searchResults: SearchResult[] = [];
+      let explicitSearch = false;
+      if (searchOptions?.isSearch && searchOptions?.searchQuery) {
+        explicitSearch = true;
+        // Call performSearch and get results
+        searchResults = await performSearch(searchOptions.searchQuery);
         
-        // Determine operation type based on context
-        let operationType = 'REPLACE'; // Default operation
+        // Add search results to search history
+        const searchItem: SearchHistoryItem = {
+          id: createId(),
+          query: searchOptions.searchQuery,
+          results: searchResults,
+          timestamp: new Date()
+        };
+        setSearchHistory(prev => [searchItem, ...prev]);
+      }
+      
+      // Determine intent - this will tell us whether to send to editor or conversation
+      let intentAnalysis;
+      try {
+        const { IntentAgentService } = await import('../lib/services/IntentAgentService');
+        intentAnalysis = await IntentAgentService.analyzeIntent(content, editorContext);
+        console.log('Intent analysis:', intentAnalysis);
         
-        if (editorContext?.editorContent && editorContext.editorContent.length > 0) {
-          // If we had existing content, this is likely a modification
-          // The specific type of operation could be inferred from intent or metadata
-          operationType = intentAnalysis.metadata?.editorAction || 'MODIFY';
-        } else {
-          // If there was no existing content, this is a creation operation
-          operationType = 'CREATE';
-        }
-        
-        // Emit a custom event that the editor component can listen for
-        const editorUpdateEvent = new CustomEvent('editor:update', {
-          detail: {
-            blocks: creatorResponse.editorContent,
-            metadata: intentAnalysis.metadata,
-            operation: operationType,
-            userInput: content, // Include the user's original request for context
-            hadPriorContent: !!(editorContext?.editorContent && editorContext.editorContent.length > 0)
+        // Check if intent analysis indicates a need for web search (and we haven't already done one)
+        if (!explicitSearch && intentAnalysis.needsWebSearch && intentAnalysis.searchQuery) {
+          console.log('Auto-detecting search need:', intentAnalysis.searchQuery);
+          
+          // Perform the search
+          searchResults = await performSearch(intentAnalysis.searchQuery);
+          
+          // Add search results to search history
+          if (searchResults.length > 0) {
+            const searchItem: SearchHistoryItem = {
+              id: createId(),
+              query: intentAnalysis.searchQuery,
+              results: searchResults,
+              timestamp: new Date()
+            };
+            setSearchHistory(prev => [searchItem, ...prev]);
           }
-        });
-        window.dispatchEvent(editorUpdateEvent);
-      } else {
-        console.log('CONVERSATION DESTINATION DETECTED: AI output staying in conversation pane');
-        // Normal conversation flow continues as is
-      }
-      
-    } catch (error) {
-      console.error('Error in sendMessage:', error);
-      
-      // Add error message to conversation
-      const errorMessage: Message = { 
-        role: 'assistant', 
-        content: `Error: Could not get a response from the AI model. Please check your API keys and try again.`,
-        contentType: 'text',
-        model: currentConversation.model
-      };
-      
-      const errorConversation = {
-        ...updatedConversation,
-        messages: [...updatedConversation.messages, errorMessage],
-        updatedAt: new Date(),
-      };
-      
-      setCurrentConversation(errorConversation);
-      setConversationHistory(prev => 
-        prev.map(conv => conv.id === errorConversation.id ? errorConversation : conv)
-      );
-      
-      // Save error message to database if authenticated
-      if (userId) {
-        try {
-          const { MessageService } = await import('../lib/services/MessageService');
-          const errorMessageId = await MessageService.createMessage(
-            currentConversation.id,
-            errorMessage,
-            userId
-          );
-        } catch (dbError) {
-          console.error('Error saving error message:', dbError);
         }
+      } catch (error) {
+        console.error('Error analyzing intent:', error);
+        intentAnalysis = {
+          destination: 'CONVERSATION',
+          confidence: 1.0,
+          reasoning: 'Error in intent analysis, defaulting to conversation'
+        };
       }
+      
+      // Generate AI response using creator agent
+      try {
+        const { CreatorAgentService } = await import('../lib/services/CreatorAgentService');
+        
+        // Get recent conversation history for context (limit to 10 messages)
+        const conversationContext = updatedConversation.messages
+          .slice(-10)
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }));
+          
+        // If we have search results, add them to conversation context
+        if (searchResults.length > 0) {
+          const { SearchService } = await import('../lib/services/SearchService');
+          const formattedResults = SearchService.formatResults(searchResults);
+          
+          // Add search results as a system message in conversation context
+          conversationContext.push({
+            role: 'system',
+            content: `Search results for "${searchOptions?.searchQuery || intentAnalysis?.searchQuery}":\n\n${formattedResults}`
+          });
+          
+          // If this was an auto-detected search (not explicit /search command),
+          // add a message to inform the user that a search was performed
+          if (!explicitSearch && intentAnalysis?.needsWebSearch) {
+            // Add a system message to let the user know we performed a search
+            updatedConversation.messages.push({
+              role: 'system',
+              content: `I performed a web search for "${intentAnalysis.searchQuery}" to help answer your question.`,
+            });
+            
+            // Update conversation in state
+            setCurrentConversation(updatedConversation);
+            updateConversationInHistory(updatedConversation);
+          }
+        }
+          
+        // Process with creator agent
+        const creatorResponse = await CreatorAgentService.processRequest(
+          content,
+          intentAnalysis,
+          conversationContext,
+          editorContext?.editorContent
+        );
+        
+        // Add AI response to conversation
+        updatedConversation.messages.push({
+          role: 'assistant',
+          content: creatorResponse.chatContent,
+          model: currentModel
+        });
+        
+        // Update conversation in state again
+        setCurrentConversation(updatedConversation);
+        updateConversationInHistory(updatedConversation);
+        
+        // If we have editor content and intent is EDITOR, dispatch it to editor
+        if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
+          // Create a custom event to send the editor content to the editor component
+          const editorContentEvent = new CustomEvent('editor:setContent', {
+            detail: {
+              content: creatorResponse.editorContent
+            }
+          });
+          window.dispatchEvent(editorContentEvent);
+        }
+      } catch (error) {
+        console.error('Error generating AI response:', error);
+        
+        // Add error message to conversation
+        updatedConversation.messages.push({
+          role: 'assistant',
+          content: 'I apologize, but I encountered an error while processing your request. Please try again.',
+          model: currentModel
+        });
+        
+        // Update conversation in state
+        setCurrentConversation(updatedConversation);
+        updateConversationInHistory(updatedConversation);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  // Perform web search function
+  const performSearch = async (query: string): Promise<SearchResult[]> => {
+    try {
+      console.log(`Performing search for: ${query}`);
+      const { SearchService } = await import('../lib/services/SearchService');
+      const results = await SearchService.search(query, 5);
+      return results;
+    } catch (error) {
+      console.error('Error performing search:', error);
+      return [];
     }
   };
 
@@ -585,6 +589,13 @@ export function AIProvider({ children }: AIProviderProps) {
     }
   };
 
+  // Update conversation in history
+  const updateConversationInHistory = (conversation: Conversation) => {
+    setConversationHistory(prev => 
+      prev.map(conv => conv.id === conversation.id ? conversation : conv)
+    );
+  };
+
   return (
     <AIContext.Provider 
       value={{
@@ -594,6 +605,7 @@ export function AIProvider({ children }: AIProviderProps) {
         isLoadingConversations,
         currentConversation,
         conversationHistory,
+        searchHistory,
         createNewConversation,
         sendMessage,
         selectConversation,

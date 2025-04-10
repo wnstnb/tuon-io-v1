@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Message } from '../context/AIContext';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, Search, Info } from 'lucide-react';
 import { ImageService } from '../lib/services/ImageService';
 import { supabase } from '../lib/supabase';
 
@@ -12,6 +12,9 @@ interface ChatMessageProps {
 
 export default function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  const isSystem = message.role === 'system';
+  const isSearchResult = isSystem && message.content.includes('Search results for');
+  const isSearchNotification = isSystem && message.content.includes('performed a web search for');
   const hasImage = !!message.imageUrl;
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -121,12 +124,20 @@ export default function ChatMessage({ message }: ChatMessageProps) {
   };
   
   return (
-    <div className={`chat-message ${isUser ? 'user-message' : 'assistant-message'}`}>
+    <div className={`chat-message ${isUser ? 'user-message' : isSystem ? 'system-message' : 'assistant-message'}`}>
       <div className="message-avatar">
-        {isUser ? <User size={20} /> : <Bot size={20} />}
+        {isUser ? (
+          <User size={20} />
+        ) : isSearchResult || isSearchNotification ? (
+          <Search size={20} />
+        ) : isSystem ? (
+          <Info size={20} />
+        ) : (
+          <Bot size={20} />
+        )}
       </div>
       <div className="message-content">
-        <div className="message-bubble">
+        <div className={`message-bubble ${isSearchResult ? 'search-result-message' : ''} ${isSearchNotification ? 'search-notification-message' : ''}`}>
           {/* Display text content */}
           {message.content && message.content.split('\n').map((line, i) => (
             <React.Fragment key={i}>

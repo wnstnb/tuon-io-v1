@@ -250,11 +250,45 @@ export default function Editor({ initialContent, onChange, artifactId, userId, o
     // Add event listener with type assertion
     window.addEventListener('editor:update', handleEditorUpdate as EventListener);
     
+    // Handle editor:setContent events from AIContext
+    const handleSetContent = (event: CustomEvent) => {
+      console.log('Editor received setContent event:', event.detail);
+      if (event.detail && event.detail.content) {
+        const content = event.detail.content;
+        
+        // Show status indicator
+        setAiStatus({
+          isProcessing: true,
+          operation: 'CREATE',
+          message: 'Creating new content...'
+        });
+        
+        // Update editor content
+        console.log('Editor: Setting new content from AIContext');
+        setAiContent(content);
+        
+        // Trigger save
+        if (onChange) {
+          console.log('Editor: Triggering autosave after content update');
+          onChange(content);
+        }
+        
+        // Clear status after a delay
+        setTimeout(() => {
+          setAiStatus({ isProcessing: false });
+        }, 2000);
+      }
+    };
+    
+    // Add event listener for editor:setContent
+    window.addEventListener('editor:setContent', handleSetContent as EventListener);
+    
     // Clean up
     return () => {
       window.removeEventListener('editor:update', handleEditorUpdate as EventListener);
+      window.removeEventListener('editor:setContent', handleSetContent as EventListener);
     };
-  }, []);
+  }, [onChange]);
 
   // Expose current content when requested
   React.useEffect(() => {

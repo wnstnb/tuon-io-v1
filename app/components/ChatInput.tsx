@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, FormEvent, useRef, useEffect } from 'react';
-import { Send, Image } from 'lucide-react';
-import { useAI, EditorContext } from '../context/AIContext';
+import { Send, Image, Search } from 'lucide-react';
+import { useAI, EditorContext, SearchOptions } from '../context/AIContext';
 import { Block } from '@blocknote/core';
 
 // Optional prop to receive editor context from parent components
@@ -18,6 +18,7 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [capturedEditorContent, setCapturedEditorContent] = useState<Block[] | undefined>(undefined);
+  const [isSearchMode, setIsSearchMode] = useState(false);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -171,20 +172,26 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
       editorContent: editorContent
     };
     
-    // Log editor context for debugging
-    if (enhancedEditorContext) {
-      console.log('Sending message with enhanced editor context:', {
-        ...enhancedEditorContext,
-        editorContent: editorContent ? `[${editorContent.length} blocks]` : 'none'
-      });
-    }
+    // Check if this is a search request (starts with /search)
+    const isSearchRequest = userMessage.trim().startsWith('/search');
     
     // Handle message with image
     if (selectedImage) {
       const imageDataUrl = imagePreview;
       clearSelectedImage();
       await sendMessage(userMessage, imageDataUrl, enhancedEditorContext);
+    } else if (isSearchRequest) {
+      // Extract the search query (everything after /search)
+      const searchQuery = userMessage.trim().substring('/search'.length).trim();
+      if (searchQuery) {
+        // Call sendMessage with search flag and query
+        await sendMessage(userMessage, null, enhancedEditorContext, { isSearch: true, searchQuery });
+      } else {
+        // Empty search query, handle as normal message
+        await sendMessage(userMessage, null, enhancedEditorContext);
+      }
     } else {
+      // Normal message (not search)
       await sendMessage(userMessage, null, enhancedEditorContext);
     }
   };
@@ -197,65 +204,77 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     }
   };
 
+  // Check for search mode when message changes
+  useEffect(() => {
+    setIsSearchMode(message.trim().startsWith('/search'));
+  }, [message]);
+
   return (
-    <form onSubmit={handleSubmit} className="chat-input-container">
-      {imagePreview && (
-        <div className="image-preview-container">
-          <img 
-            src={imagePreview} 
-            alt="Preview" 
-            className="image-preview" 
-          />
-          <button 
-            type="button" 
-            onClick={clearSelectedImage}
-            className="clear-image-button"
-            aria-label="Remove image"
-          >
-            &times;
-          </button>
+    <div className={`chat-input-container ${isSearchMode ? 'search-mode' : ''}`}>
+      <form onSubmit={handleSubmit} className="chat-input-form">
+        {/* Display search indicator when in search mode */}
+        {isSearchMode && (
+          <div className="search-indicator">
+            <Search size={16} />
+            <span>Web Search Mode</span>
+          </div>
+        )}
+        
+        {/* Selected image preview */}
+        {imagePreview && (
+          <div className="image-preview-container">
+            <img src={imagePreview} alt="Preview" className="image-preview" />
+            <button 
+              type="button" 
+              className="clear-image-btn"
+              onClick={clearSelectedImage}
+              aria-label="Clear selected image"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+        <div className="input-wrapper">
+          <div className="textarea-container">
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Send a message or paste an image..."
+              disabled={isLoading}
+              rows={1}
+              className="chat-textarea"
+            />
+          </div>
+          <div className="input-buttons">
+            <button 
+              type="button" 
+              onClick={() => fileInputRef.current?.click()}
+              className="image-button"
+              disabled={isLoading}
+              aria-label="Upload image"
+            >
+              <Image size={18} />
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              style={{ display: 'none' }}
+            />
+            <button 
+              type="submit" 
+              disabled={(!message.trim() && !selectedImage) || isLoading}
+              className="send-button"
+              aria-label="Send message"
+            >
+              <Send size={18} />
+            </button>
+          </div>
         </div>
-      )}
-      <div className="input-wrapper">
-        <div className="textarea-container">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Send a message or paste an image..."
-            disabled={isLoading}
-            rows={1}
-            className="chat-textarea"
-          />
-        </div>
-        <div className="input-buttons">
-          <button 
-            type="button" 
-            onClick={() => fileInputRef.current?.click()}
-            className="image-button"
-            disabled={isLoading}
-            aria-label="Upload image"
-          >
-            <Image size={18} />
-          </button>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            style={{ display: 'none' }}
-          />
-          <button 
-            type="submit" 
-            disabled={(!message.trim() && !selectedImage) || isLoading}
-            className="send-button"
-            aria-label="Send message"
-          >
-            <Send size={18} />
-          </button>
-        </div>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 } 
