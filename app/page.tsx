@@ -35,6 +35,9 @@ export default function LandingPage() {
             <Link href="/login" className="cta-button">
               Get Started
             </Link>
+            <Link href="/intent-tester" className="cta-secondary ml-4">
+              Try Intent Analysis
+            </Link>
           </div>
         </div>
       </section>

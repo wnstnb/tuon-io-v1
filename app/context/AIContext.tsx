@@ -34,6 +34,13 @@ export interface Conversation {
   updatedAt: Date;
 }
 
+// Define editor context type for intent analysis
+export interface EditorContext {
+  currentFile?: string;
+  selection?: string;
+  cursorPosition?: number;
+}
+
 // Define AI context type
 interface AIContextType {
   currentModel: AIModelType;
@@ -43,7 +50,7 @@ interface AIContextType {
   currentConversation: Conversation | null;
   conversationHistory: Conversation[];
   createNewConversation: (model?: AIModelType) => void;
-  sendMessage: (content: string, imageDataUrl?: string | null) => Promise<void>;
+  sendMessage: (content: string, imageDataUrl?: string | null, editorContext?: EditorContext) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
   loadUserConversations: () => Promise<void>;
@@ -312,7 +319,11 @@ export function AIProvider({ children }: AIProviderProps) {
   };
 
   // Send a message to the AI
-  const sendMessage = async (content: string, imageDataUrl?: string | null) => {
+  const sendMessage = async (
+    content: string, 
+    imageDataUrl?: string | null,
+    editorContext?: EditorContext
+  ) => {
     // Check if API clients are initialized
     if (!openaiClient || !genaiClient) {
       console.error('API clients not initialized yet');
@@ -320,9 +331,10 @@ export function AIProvider({ children }: AIProviderProps) {
     }
 
     // Get database services
-    const [UserService, MessageService] = await Promise.all([
+    const [UserService, MessageService, IntentAgentService] = await Promise.all([
       import('../lib/services/UserService').then(mod => mod.UserService),
-      import('../lib/services/MessageService').then(mod => mod.MessageService)
+      import('../lib/services/MessageService').then(mod => mod.MessageService),
+      import('../lib/services/IntentAgentService').then(mod => mod.IntentAgentService)
     ]);
     
     // Get current user
@@ -338,7 +350,7 @@ export function AIProvider({ children }: AIProviderProps) {
         // we need to wait for the next render cycle
         setTimeout(() => {
           if (currentConversation) {
-            sendMessage(content, imageDataUrl);
+            sendMessage(content, imageDataUrl, editorContext);
           }
         }, 100);
         
@@ -392,6 +404,11 @@ export function AIProvider({ children }: AIProviderProps) {
       // Track response timing
       const startTime = Date.now();
       
+      // Analyze user intent first to determine if this should go to editor
+      console.log('Analyzing user intent...');
+      const intentAnalysis = await IntentAgentService.analyzeIntent(content, editorContext);
+      console.log('Intent analysis result:', intentAnalysis);
+      
       // Get AI response
       let aiResponse = await getAIResponse(updatedConversation, content, imageDataUrl);
       
@@ -405,7 +422,8 @@ export function AIProvider({ children }: AIProviderProps) {
         contentType: 'text',
         model: currentConversation.model,
         metadata: {
-          response_time_ms: responseTime
+          response_time_ms: responseTime,
+          intent_analysis: intentAnalysis // Include intent analysis in metadata
         }
       };
       
@@ -451,6 +469,21 @@ export function AIProvider({ children }: AIProviderProps) {
           console.error('Error saving assistant message:', error);
         }
       }
+      
+      // Handle routing based on intent analysis
+      if (intentAnalysis.destination === 'EDITOR') {
+        // This is where we would dispatch an event or call a function to update the editor
+        console.log('EDITOR DESTINATION DETECTED: AI output should go to the editor');
+        console.log('Editor metadata:', intentAnalysis.metadata);
+        
+        // For now, just log that this would be sent to the editor
+        // The actual implementation of editor integration will come next
+        // This could dispatch an event, call a callback, etc.
+      } else {
+        console.log('CONVERSATION DESTINATION DETECTED: AI output staying in conversation pane');
+        // Normal conversation flow continues as is
+      }
+      
     } catch (error) {
       console.error('Error in sendMessage:', error);
       

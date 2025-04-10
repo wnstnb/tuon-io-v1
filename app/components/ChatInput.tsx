@@ -2,9 +2,14 @@
 
 import React, { useState, FormEvent, useRef, useEffect } from 'react';
 import { Send, Image } from 'lucide-react';
-import { useAI } from '../context/AIContext';
+import { useAI, EditorContext } from '../context/AIContext';
 
-export default function ChatInput() {
+// Optional prop to receive editor context from parent components
+interface ChatInputProps {
+  editorContext?: EditorContext;
+}
+
+export default function ChatInput({ editorContext }: ChatInputProps = {}) {
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -126,13 +131,18 @@ export default function ChatInput() {
       textareaRef.current.style.height = 'auto';
     }
     
+    // Log editor context for debugging
+    if (editorContext) {
+      console.log('Sending message with editor context:', editorContext);
+    }
+    
     // Handle message with image
     if (selectedImage) {
       const imageDataUrl = imagePreview;
       clearSelectedImage();
-      await sendMessage(userMessage, imageDataUrl);
+      await sendMessage(userMessage, imageDataUrl, editorContext);
     } else {
-      await sendMessage(userMessage);
+      await sendMessage(userMessage, null, editorContext);
     }
   };
 
