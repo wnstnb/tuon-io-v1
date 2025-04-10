@@ -66,9 +66,23 @@ function EditorPageContent() {
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (artifactId: string, user: User) => {
     try {
+      console.log(`Loading artifact data for ID: ${artifactId}`);
+      
+      // Reset content to empty first to avoid showing old content
+      setEditorContent([{
+        id: "1",
+        type: "paragraph",
+        props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+        content: [],
+        children: []
+      }]);
+      
+      setTitle('Loading...'); // Reset title while loading
+      
       const artifact = await ArtifactService.getArtifact(artifactId);
       
       if (artifact) {
+        console.log(`Successfully loaded artifact: ${artifact.title} with ${artifact.content.length} blocks`);
         setTitle(artifact.title);
         setEditorContent(artifact.content);
         setCurrentArtifactId(artifact.id);
@@ -202,6 +216,7 @@ function EditorPageContent() {
   // Load artifact if ID is provided and different from current
   useEffect(() => {
     if (artifactId && user) {
+      console.log(`Loading artifact with ID: ${artifactId}`);
       // If URL contains an artifact ID, use it and load the artifact
       setCurrentArtifactId(artifactId);
       setIsArtifactPersisted(true);
@@ -301,6 +316,7 @@ function EditorPageContent() {
                 onTitleChange={handleTitleChange} 
               />
               <Editor 
+                key={`editor-instance-${currentArtifactId}`}
                 {...editorProps}
               />
             </div>

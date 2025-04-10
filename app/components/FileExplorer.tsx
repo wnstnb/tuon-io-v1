@@ -74,7 +74,12 @@ export default function FileExplorer({ currentArtifactId }: FileExplorerProps) {
       setSelectedArtifacts(newSelectedArtifacts);
     } else {
       // In normal mode, navigate to the artifact
-      router.push(`/editor?artifactId=${artifactId}`);
+      console.log(`Navigating to artifact: ${artifactId}`);
+      // Use replace instead of push to ensure a clean navigation
+      router.replace(`/editor?artifactId=${artifactId}`);
+      
+      // Also update the local selection state
+      setSelectedArtifactId(artifactId);
     }
   };
 
