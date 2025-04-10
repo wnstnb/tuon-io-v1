@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import Editor from '../components/Editor';
+import EditorFAB from '../components/EditorFAB';
 import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
 import RightPane from '../components/RightPane';
@@ -42,6 +43,8 @@ function EditorPageContent() {
   const [leftPanelSize, setLeftPanelSize] = useState(20);
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [rightPanelSize, setRightPanelSize] = useState(20);
+  const [isLeftPanelAnimating, setIsLeftPanelAnimating] = useState(false);
+  const [isRightPanelAnimating, setIsRightPanelAnimating] = useState(false);
   const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(() => {
     if (artifactId) return artifactId;
     return crypto.randomUUID();
@@ -53,12 +56,58 @@ function EditorPageContent() {
 
   // Basic UI interaction callbacks
   const toggleLeftPanel = useCallback(() => {
-    setShowLeftPanel(!showLeftPanel);
-  }, [showLeftPanel]);
+    if (isLeftPanelAnimating) return;
+    
+    if (showLeftPanel) {
+      // Collapsing left panel
+      setIsLeftPanelAnimating(true);
+      const leftPanel = document.getElementById('left-panel');
+      if (leftPanel) {
+        leftPanel.style.animation = 'slideOutLeft 0.3s ease forwards';
+        setTimeout(() => {
+          setShowLeftPanel(false);
+          setIsLeftPanelAnimating(false);
+        }, 300);
+      } else {
+        setShowLeftPanel(false);
+        setIsLeftPanelAnimating(false);
+      }
+    } else {
+      // Expanding left panel
+      setShowLeftPanel(true);
+      setIsLeftPanelAnimating(true);
+      setTimeout(() => {
+        setIsLeftPanelAnimating(false);
+      }, 300);
+    }
+  }, [showLeftPanel, isLeftPanelAnimating]);
 
   const toggleRightPanel = useCallback(() => {
-    setShowRightPanel(!showRightPanel);
-  }, [showRightPanel]);
+    if (isRightPanelAnimating) return;
+    
+    if (showRightPanel) {
+      // Collapsing right panel
+      setIsRightPanelAnimating(true);
+      const rightPanel = document.getElementById('right-panel');
+      if (rightPanel) {
+        rightPanel.style.animation = 'slideOutRight 0.3s ease forwards';
+        setTimeout(() => {
+          setShowRightPanel(false);
+          setIsRightPanelAnimating(false);
+        }, 300);
+      } else {
+        setShowRightPanel(false);
+        setIsRightPanelAnimating(false);
+      }
+    } else {
+      // Expanding right panel
+      setShowRightPanel(true);
+      setIsRightPanelAnimating(true);
+      setTimeout(() => {
+        setIsRightPanelAnimating(false);
+      }, 300);
+    }
+  }, [showRightPanel, isRightPanelAnimating]);
 
   const handlePanelResize = useCallback((sizes: number[]) => {
     if (sizes.length > 0) {
@@ -359,6 +408,10 @@ function EditorPageContent() {
               <Editor 
                 key={`editor-instance-${currentArtifactId}`}
                 {...editorProps}
+              />
+              <EditorFAB 
+                artifactId={currentArtifactId}
+                userId={user?.id}
               />
               {!showRightPanel && (
                 <button

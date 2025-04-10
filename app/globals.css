@@ -226,10 +226,12 @@ h1 {
 }
 
 .main-content {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
+  transition: margin 0.3s ease;
 }
 
 /* LeftPane styles */
@@ -240,6 +242,7 @@ h1 {
   width: 100%;
   border-right: 1px solid var(--border-color);
   overflow: hidden;
+  transition: border-color 0.3s ease;
 }
 
 .tabs-container {
@@ -318,6 +321,131 @@ h1 {
   overflow: hidden;
 }
 
+/* Panel animation keyframes */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Panel specific animations */
+.left-panel {
+  animation: slideInLeft 0.3s ease forwards;
+  width: 100% !important;
+  min-width: 200px;
+  max-width: 40%;
+  overflow: hidden;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease;
+}
+
+.right-panel {
+  animation: slideInRight 0.3s ease forwards;
+  width: 100% !important;
+  min-width: 200px;
+  max-width: 40%;
+  overflow: hidden;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Toggle button animations */
+.toggle-button-left {
+  animation: fadeInSlideRight 0.3s ease forwards;
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.toggle-button-right {
+  animation: fadeInSlideLeft 0.3s ease forwards;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+@keyframes fadeInSlideRight {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+@keyframes fadeInSlideLeft {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+  }
+}
+
+/* Toggle button on resize handle animations */
+#left-resize-handle .toggle-button {
+  animation: fadeIn 0.3s ease forwards;
+  right: -12px;
+}
+
+#right-resize-handle .toggle-button {
+  animation: fadeIn 0.3s ease forwards;
+  left: -12px;
+}
+
+/* Resize handle animations */
+.resize-handle {
+  transition: background-color 0.2s linear;
+}
+
 /* Resize handle styles */
 .resize-handle {
   background-color: var(--border-color);
@@ -379,34 +507,7 @@ h1 {
   left: -12px;
 }
 
-/* Toggle button when left panel is collapsed */
-.toggle-button-left {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
-/* Toggle button for right pane */
-.toggle-button-right {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
 /* Panel specific styles */
-.left-panel {
-  width: 100% !important;
-  min-width: 200px;
-  max-width: 40%;
-  overflow: hidden;
-}
-
 [data-panel-id="left-panel"] {
   width: 100%;
   height: 100%;
@@ -1608,23 +1709,6 @@ html.dark .ai-status-indicator {
 }
 
 /* Right panel styles */
-.right-panel {
-  width: 100% !important;
-  min-width: 200px;
-  max-width: 40%;
-  overflow: hidden;
-}
-
-[data-panel-id="right-panel"] {
-  width: 100%;
-  height: 100%;
-}
-
-[data-panel-id="right-panel"] > div {
-  width: 100%;
-  height: 100%;
-}
-
 .right-pane-container {
   display: flex;
   flex-direction: column;
@@ -1632,6 +1716,7 @@ html.dark .ai-status-indicator {
   width: 100%;
   border-left: 1px solid var(--border-color);
   overflow: hidden;
+  transition: border-color 0.3s ease;
 }
 
 /* Search placeholder styling */
@@ -1643,4 +1728,19 @@ html.dark .ai-status-indicator {
   color: var(--text-color-secondary);
   text-align: center;
   padding: 20px;
+}
+
+/* Button animations keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Content panel transition */
+[data-panel-id="content-panel"] {
+  transition: flex-basis 0.3s ease;
 } 

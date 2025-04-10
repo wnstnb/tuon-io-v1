@@ -3,7 +3,6 @@
 import React from 'react';
 import { type Block } from "@blocknote/core";
 import dynamic from 'next/dynamic';
-import EditorFAB from './EditorFAB';
 
 // Dynamically import BlockNote components with SSR disabled
 const BlockNoteEditor = dynamic(
@@ -337,11 +336,6 @@ export default function Editor({ initialContent, onChange, artifactId, userId, o
           }
         }}
         EditorComponent={BlockNoteEditor}
-        artifactId={artifactId}
-        userId={userId}
-      />
-      
-      <EditorFAB
         artifactId={artifactId}
         userId={userId}
       />
