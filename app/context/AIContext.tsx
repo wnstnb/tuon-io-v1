@@ -518,6 +518,44 @@ export function AIProvider({ children }: AIProviderProps) {
         setCurrentConversation(updatedConversation);
         updateConversationInHistory(updatedConversation);
         
+        // Check if this is the first message exchange and infer a title if it is
+        if (updatedConversation.messages.length === 2 && updatedConversation.title === 'New Conversation') {
+          try {
+            // Combine user message and AI response for better title inference
+            const userMessage = updatedConversation.messages[0].content;
+            const aiResponse = updatedConversation.messages[1].content;
+            const combinedContent = `User: ${userMessage}\nAgent: ${aiResponse}`;
+            
+            // Call title inference API
+            const response = await fetch('/api/infer-title', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                content: combinedContent,
+                contextType: 'conversation',
+                contextId: updatedConversation.id,
+              }),
+            });
+            
+            if (response.ok) {
+              const result = await response.json();
+              if (result.success && result.title) {
+                // Update conversation title in state
+                const titleUpdatedConversation = {
+                  ...updatedConversation,
+                  title: result.title
+                };
+                setCurrentConversation(titleUpdatedConversation);
+                updateConversationInHistory(titleUpdatedConversation);
+              }
+            }
+          } catch (error) {
+            console.error('Error inferring conversation title:', error);
+            // Continue without title inference on error
+          }
+        }
+        
         // If we have editor content and intent is EDITOR, dispatch it to editor
         if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
           // Create a custom event to send the editor content to the editor component

@@ -92,10 +92,19 @@ const BlockNoteEditor = dynamic(
         React.useEffect(() => {
           if (!props.onChange) return;
           
-          // Create a more effective debounce implementation
+          // Create a debounce implementation for editor changes
           let debounceTimeout: NodeJS.Timeout | null = null;
           const debounceDelay = 3000; // 3 seconds
           
+          // Define the function to be debounced
+          const debouncedOnChange = () => {
+            // Only update when content has meaningful changes
+            const blocks = editor.document;
+            props.onChange(blocks);
+            console.log(`Editor.tsx: Debounced onChange triggered for artifact ${props.artifactId}`);
+          };
+
+          // Define the handler that resets the debounce timer
           const handleChange = () => {
             // Clear any existing timeout
             if (debounceTimeout) {
@@ -103,11 +112,7 @@ const BlockNoteEditor = dynamic(
             }
             
             // Set a new timeout
-            debounceTimeout = setTimeout(() => {
-              // Only update when content has meaningful changes
-              const blocks = editor.document;
-              props.onChange(blocks);
-            }, debounceDelay);
+            debounceTimeout = setTimeout(debouncedOnChange, debounceDelay);
           };
           
           // Register the handler with the editor
@@ -118,7 +123,11 @@ const BlockNoteEditor = dynamic(
             if (debounceTimeout) {
               clearTimeout(debounceTimeout);
             }
+            // Also remove the listener if editor instance supports it (depends on BlockNote API)
+            // If BlockNote doesn't provide a specific unregister method, this cleanup might be sufficient
+            // editor.offChange(handleChange); // Example, if such a method existed
           };
+          // Rerun effect if the editor instance or the onChange prop changes
         }, [editor, props.onChange]);
         
         return (

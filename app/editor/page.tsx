@@ -54,6 +54,7 @@ function EditorPageContent() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [isSaving, setIsSaving] = useState(false);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [hasInferredTitleForCurrentArtifact, setHasInferredTitleForCurrentArtifact] = useState<boolean>(false);
 
   // Basic UI interaction callbacks
   const toggleLeftPanel = useCallback(() => {
@@ -128,10 +129,66 @@ function EditorPageContent() {
     }
   }, [leftPanelSize, rightPanelSize, showRightPanel]);
 
+  // Helper function to extract text content for title inference
+  const extractTextForInference = (content: Block[]): string => {
+    return content.slice(0, 5).map((block: any) => {
+      if (block.content) {
+        return block.content.map((item: any) => item.text || '').join(' ');
+      }
+      return '';
+    }).join('\n').trim();
+  };
+
+  // Function to call the title inference API
+  const inferTitle = useCallback(async (artifactId: string, contentForInference: Block[]) => {
+    if (!user) return; // Need user context
+
+    const textContent = extractTextForInference(contentForInference);
+
+    if (textContent.length < 20) {
+      console.log('Content too short, skipping title inference.');
+      return; // Don't infer if content is too short
+    }
+
+    console.log(`Inferring title for artifact ${artifactId}...`);
+    setHasInferredTitleForCurrentArtifact(true); // Mark as attempted
+
+    try {
+      const response = await fetch('/api/infer-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Ensure cookies are sent
+        body: JSON.stringify({
+          content: textContent,
+          contextType: 'artifact',
+          contextId: artifactId,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.title) {
+          console.log(`Title inference successful: "${data.title}"`);
+          setTitle(data.title); // Update local title state
+          setSaveStatus('saved'); // Assume API updated DB, mark as saved
+        } else {
+          console.warn('Title inference API call succeeded but returned no title.');
+        }
+      } else {
+        console.error('Title inference API call failed:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error calling title inference API:', error);
+      // Optionally reset the flag if the call fails completely, allowing another try?
+      // setHasInferredTitleForCurrentArtifact(false); 
+    }
+  }, [user]); // Dependency: user
+
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (artifactId: string, user: User) => {
     try {
       console.log(`Loading artifact data for ID: ${artifactId}`);
+      setHasInferredTitleForCurrentArtifact(false); // Reset inference flag for new artifact
       
       // Reset content to empty first to avoid showing old content
       setEditorContent([{
@@ -153,11 +210,20 @@ function EditorPageContent() {
         setCurrentArtifactId(artifact.id);
         setIsArtifactPersisted(true);
         setSaveStatus('saved');
+
+        // Check if we should infer a title after loading
+        const isPlaceholderTitle = !artifact.title || artifact.title === 'Untitled Artifact';
+        if (isPlaceholderTitle) {
+          // Use a short delay to allow editor content to potentially render fully
+          setTimeout(() => inferTitle(artifact.id, artifact.content), 500); 
+        } else {
+          setHasInferredTitleForCurrentArtifact(true); // Mark as done if loaded title is specific
+        }
       }
     } catch (error) {
       console.error('Error loading artifact:', error);
     }
-  }, []);
+  }, [inferTitle]); // Added inferTitle dependency
 
   // Create a new artifact in Supabase with the client-generated ID
   const createArtifact = useCallback(async () => {
@@ -270,13 +336,18 @@ function EditorPageContent() {
         if (content.length > 0 && user) {
           // Use a ref to track if this is the most recent save request
           const saveTimestamp = Date.now();
-          saveArtifact();
+          saveArtifact(); // Save the actual content
+
+          // Check if we need to infer title for the first time
+          if (!hasInferredTitleForCurrentArtifact && currentArtifactId) {
+             inferTitle(currentArtifactId, content); 
+          }
         }
       }, 7000); // 7 second debounce (longer than Editor's debounce)
       
       setSaveTimeout(timeout);
     }
-  }, [user, saveTimeout, saveArtifact, isSaving]);
+  }, [user, saveTimeout, saveArtifact, isSaving, hasInferredTitleForCurrentArtifact, currentArtifactId, inferTitle]); // Added dependencies
 
   // Listen for artifact selection events from FileExplorer
   useEffect(() => {
@@ -299,6 +370,29 @@ function EditorPageContent() {
       window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
     };
   }, [user, loadArtifact, currentArtifactId]);
+
+  // Listen for title updates from the title inference service -- REMOVED as inference is now handled differently
+  // useEffect(() => {
+  //   // Handler for title updates coming from the inference service
+  //   const handleTitleUpdated = (event: CustomEvent) => {
+  //     const { artifactId, title } = event.detail;
+      
+  //     // Only update the title if it's for the current artifact
+  //     if (artifactId && artifactId === currentArtifactId && title) {
+  //       console.log(`Received title update from inference: "${title}"`);
+  //       setTitle(title);
+  //       setSaveStatus('saved');
+  //     }
+  //   };
+
+  //   // Add event listener for the title update event
+  //   window.addEventListener('artifactTitleUpdated', handleTitleUpdated as EventListener);
+    
+  //   // Clean up
+  //   return () => {
+  //     window.removeEventListener('artifactTitleUpdated', handleTitleUpdated as EventListener);
+  //   };
+  // }, [currentArtifactId]);
 
   // Load artifact if ID is provided in URL and different from current
   useEffect(() => {

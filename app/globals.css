@@ -378,11 +378,23 @@ h1 {
   background-color: var(--border-color);
   transition: background-color 0.2s linear;
   z-index: 10;
-  width: 6px;
+  width: 10px;  /* Wider invisible clickable area */
   position: relative;
 }
 
-[data-panel-resize-handle-id]:hover {
+[data-panel-resize-handle-id]:before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 100%;
+  width: 1px;  /* Thin visible line */
+  background-color: var(--border-color);
+  transition: background-color 0.2s linear;
+}
+
+[data-panel-resize-handle-id]:hover:before {
   background-color: var(--primary-color);
 }
 
@@ -506,12 +518,12 @@ h1 {
 /* Toggle button on resize handle animations */
 #left-resize-handle .toggle-button {
   animation: fadeIn 0.3s ease forwards;
-  right: -12px;
+  right: -16px;
 }
 
 #right-resize-handle .toggle-button {
   animation: fadeIn 0.3s ease forwards;
-  left: -12px;
+  left: -16px;
 }
 
 /* Resize handle animations */
@@ -521,10 +533,10 @@ h1 {
 
 /* Resize handle styles */
 .resize-handle {
-  background-color: var(--border-color);
+  background-color: transparent;
   position: relative;
   cursor: col-resize;
-  width: 6px;
+  width: 10px;  /* Wider invisible clickable area */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -535,7 +547,9 @@ h1 {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 100%;
+  width: 1px;  /* Thin visible line */
+  left: 50%;
+  transform: translateX(-50%);
   background-color: var(--border-color);
 }
 
@@ -546,8 +560,8 @@ h1 {
 /* Toggle button styles */
 .toggle-button {
   position: absolute;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background-color: var(--toggle-button-bg);
   border: 1px solid var(--border-color);
@@ -557,6 +571,7 @@ h1 {
   cursor: pointer;
   z-index: 100;
   transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
 }
 
 .toggle-button:hover {
@@ -572,12 +587,16 @@ h1 {
 
 /* Left resize handle button */
 #left-resize-handle .toggle-button {
-  right: -12px;
+  right: -16px;
+  width: 36px;
+  height: 36px;
 }
 
 /* Right resize handle button */
 #right-resize-handle .toggle-button {
-  left: -12px;
+  left: -16px;
+  width: 36px;
+  height: 36px;
 }
 
 /* Panel specific styles */
@@ -1819,6 +1838,79 @@ h1 {
 .bn-container [data-content-type="code"] {
   overflow-x: auto;
   max-width: 100%;
+}
+
+/* Dark mode specific styles for BlockNote editor */
+[data-theme='dark'] .bn-container {
+  background-color: var(--editor-bg) !important;
+  color: var(--text-color) !important;
+}
+
+[data-theme='dark'] .bn-editor {
+  background-color: var(--editor-bg) !important;
+}
+
+/* Ensure all BlockNote internal elements match dark theme */
+[data-theme='dark'] .bn-container [contenteditable=true] {
+  background-color: var(--editor-bg) !important;
+  color: var(--text-color) !important;
+}
+
+[data-theme='dark'] .bn-container [data-content-type="root"] {
+  background-color: var(--editor-bg) !important;
+}
+
+/* Style the toolbar and its components in dark mode */
+[data-theme='dark'] .bn-container [role="toolbar"],
+[data-theme='dark'] .bn-container [data-toolbar="true"] {
+  background-color: var(--header-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Style all buttons and controls in the editor for dark mode */
+[data-theme='dark'] .bn-container button,
+[data-theme='dark'] .bn-container .bn-toolbar-item {
+  color: var(--text-color) !important;
+  background-color: transparent !important;
+}
+
+[data-theme='dark'] .bn-container button:hover,
+[data-theme='dark'] .bn-container .bn-toolbar-item:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+[data-theme='dark'] .bn-container button.active,
+[data-theme='dark'] .bn-container .bn-toolbar-item.active {
+  background-color: var(--active-bg) !important;
+}
+
+/* Style dropdowns and menus in dark mode */
+[data-theme='dark'] .bn-container [role="menu"],
+[data-theme='dark'] .bn-container [role="listbox"],
+[data-theme='dark'] .bn-container [data-dropdown="true"] {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-color) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+[data-theme='dark'] .bn-container [role="menuitem"],
+[data-theme='dark'] .bn-container [role="option"] {
+  color: var(--text-color) !important;
+}
+
+[data-theme='dark'] .bn-container [role="menuitem"]:hover,
+[data-theme='dark'] .bn-container [role="option"]:hover {
+  background-color: var(--hover-bg) !important;
+}
+
+/* Style code blocks in dark mode */
+[data-theme='dark'] .bn-container pre,
+[data-theme='dark'] .bn-container code,
+[data-theme='dark'] .bn-container [data-content-type="code"] {
+  background-color: var(--active-bg) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-color) !important;
 }
 
 /* Custom scrollbar styling for light and dark mode */
