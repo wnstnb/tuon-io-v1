@@ -5,11 +5,10 @@ import { useAI } from '../context/AIContext';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import ModelSelector from './ModelSelector';
-import HistoryDropdown from './HistoryDropdown';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 
 export default function ChatInterface() {
-  const { currentConversation, isLoading } = useAI();
+  const { currentConversation, isLoading, createNewConversation } = useAI();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
@@ -20,8 +19,19 @@ export default function ChatInterface() {
   return (
     <div className="chat-interface">
       <div className="chat-header">
-        <HistoryDropdown />
-        <ModelSelector />
+        <div className="header-button-container">
+          <button 
+            className="new-chat-button"
+            onClick={() => createNewConversation()}
+            aria-label="New Conversation"
+          >
+            <Plus size={16} />
+            <span>New Chat</span>
+          </button>
+        </div>
+        <div className="header-button-container">
+          <ModelSelector />
+        </div>
       </div>
       
       <div className="chat-messages">

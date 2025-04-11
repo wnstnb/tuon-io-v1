@@ -5,7 +5,7 @@ import { History, Search, X, Loader2 } from 'lucide-react';
 import { useAI } from '../context/AIContext';
 
 export default function HistoryDropdown() {
-  const { conversationHistory, selectConversation, createNewConversation, loadUserConversations } = useAI();
+  const { conversationHistory, selectConversation, loadUserConversations } = useAI();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
@@ -106,16 +106,6 @@ export default function HistoryDropdown() {
               <X size={14} />
             </button>
           </div>
-          
-          <button 
-            className="new-chat-button"
-            onClick={() => {
-              createNewConversation();
-              setIsOpen(false);
-            }}
-          >
-            New Chat
-          </button>
           
           <div className="history-list">
             {isLoadingConversations ? (

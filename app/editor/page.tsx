@@ -9,6 +9,7 @@ import EditorFAB from '../components/EditorFAB';
 import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
 import RightPane from '../components/RightPane';
+import GlobalSearch from '../components/GlobalSearch';
 import { type Block } from "@blocknote/core";
 import { ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
@@ -330,8 +331,11 @@ function EditorPageContent() {
   return (
     <main className="app-container">
       <header>
-        <div className="header-content">
-          <h1>tuon.io - Your IDE for everything</h1>
+        <div className="header-content" style={{ paddingLeft: 0 }}>
+          <h1 className="font-jetbrains-mono" style={{ paddingLeft: '8px' }}>tuon.io</h1>
+          
+          <GlobalSearch />
+          
           <div className="header-actions">
             <div className="save-status">
               {saveStatus === 'saving' && <span>Saving...</span>}
