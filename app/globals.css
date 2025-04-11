@@ -1,29 +1,29 @@
 @import './styles/components/editor-fab.css';
 
 :root {
-  /* Light theme (default) - Xcode Light inspired colors */
+  /* Light theme (default) - Based on the provided image */
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
-  --primary-color: #007aff;
-  --secondary-color: #34c759;
-  --accent-color: #ff9500;
+  --primary-color: #0091ff; /* Bright blue from image */
+  --secondary-color: #0091ff; /* Using same blue for consistency */
+  --accent-color: #0091ff;
   --text-color: #1e293b;
   --muted-text-color: #64748b;
   --border-color: #e2e8f0;
-  --header-bg: #f1f5f9;
+  --header-bg: #f8fafc;
   --editor-bg: #ffffff;
-  --title-hover-color: #0ea5e9;
+  --title-hover-color: #0091ff;
   --left-pane-bg: #f8fafc;
   --toggle-button-bg: #ffffff;
   --tab-active-bg: #f1f5f9;
-  --tab-active-border: #007aff;
-  --text-color-secondary: #666;
+  --tab-active-border: #0091ff;
+  --text-color-secondary: #64748b;
   --bg-color: #fff;
   --hover-bg: #f5f5f5;
   --active-bg: #f0f0f0;
   --input-bg: #fff;
-  --accent-color-light: #e6f0ff;
-  --accent-color-hover: #0060d0;
+  --accent-color-light: #e6f4ff;
+  --accent-color-hover: #007be6;
   --message-bg: #f9f9f9;
   --card-bg: #ffffff;
   --disabled-bg: #d1d5db;
@@ -36,12 +36,12 @@
   --bg-secondary-light: #f1f5f9;
   --text-primary: #1e293b;
   --text-secondary: #64748b;
-  --primary-color-10: rgba(0, 122, 255, 0.1);
+  --primary-color-10: rgba(0, 145, 255, 0.1);
   --danger-color: #ef4444;
   --danger-color-10: rgba(239, 68, 68, 0.1);
   --success-color: #22c55e;
-  --info-color: #3b82f6;
-  --primary-color-dark: #0056b3;
+  --info-color: #0091ff;
+  --primary-color-dark: #0076cc;
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -50,47 +50,47 @@
 }
 
 [data-theme='dark'] {
-  /* Dark theme - Xcode Dark inspired colors */
+  /* Dark theme - Based on the provided image */
   --foreground-rgb: 255, 255, 255;
-  --background-rgb: 30, 30, 30;
-  --primary-color: #0a84ff;
-  --secondary-color: #30d158;
-  --accent-color: #ff9f0a;
+  --background-rgb: 23, 28, 42;  /* Dark navy from image */
+  --primary-color: #0091ff;  /* Bright blue from image */
+  --secondary-color: #0091ff;
+  --accent-color: #0091ff;
   --text-color: #e2e8f0;
   --muted-text-color: #94a3b8;
-  --border-color: #38383f;
-  --header-bg: #1c1c1e;
-  --editor-bg: #1e1e1e;
-  --title-hover-color: #3b82f6;
-  --left-pane-bg: #1a1a1a;
-  --toggle-button-bg: #2c2c2e;
-  --tab-active-bg: #2c2c2e;
-  --tab-active-border: #0a84ff;
-  --text-color-secondary: #a0a0a0;
-  --bg-color: #121212;
-  --hover-bg: #1e1e1e;
-  --active-bg: #252525;
-  --input-bg: #1a1a1a;
-  --accent-color-light: rgba(0, 112, 243, 0.15);
-  --accent-color-hover: #1a82ff;
-  --message-bg: #1e1e1e;
-  --card-bg: #242424;
+  --border-color: #2d3748;
+  --header-bg: #1a202c;
+  --editor-bg: #171c2a;
+  --title-hover-color: #38bdf8;
+  --left-pane-bg: #171c2a;
+  --toggle-button-bg: #1f2937;
+  --tab-active-bg: #1f2937;
+  --tab-active-border: #0091ff;
+  --text-color-secondary: #94a3b8;
+  --bg-color: #171c2a;
+  --hover-bg: #1f2937;
+  --active-bg: #2d3748;
+  --input-bg: #1a202c;
+  --accent-color-light: rgba(0, 145, 255, 0.15);
+  --accent-color-hover: #38bdf8;
+  --message-bg: #1a202c;
+  --card-bg: #1a202c;
   --disabled-bg: #4b5563;
   --success-bg: #064e3b;
   --success-text: #d1fae5;
   --error-bg: #7f1d1d;
   --error-text: #fee2e2;
   /* Additional file explorer variables */
-  --bg-secondary: #1a1a1a;
-  --bg-secondary-light: #242424;
+  --bg-secondary: #171c2a;
+  --bg-secondary-light: #1a202c;
   --text-primary: #e2e8f0;
   --text-secondary: #94a3b8;
-  --primary-color-10: rgba(10, 132, 255, 0.1);
+  --primary-color-10: rgba(0, 145, 255, 0.1);
   --danger-color: #f87171;
   --danger-color-10: rgba(248, 113, 113, 0.1);
   --success-color: #4ade80;
-  --info-color: #60a5fa;
-  --primary-color-dark: #0070e0;
+  --info-color: #38bdf8;
+  --primary-color-dark: #0076cc;
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -109,12 +109,85 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
   height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+  transition: background 0.3s ease, color 0.3s ease;
+  line-height: 1.5;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: 1.875rem;
+}
+
+h2 {
+  font-size: 1.5rem;
+}
+
+h3 {
+  font-size: 1.25rem;
+}
+
+p {
+  margin-bottom: 1rem;
+  color: var(--text-color);
+}
+
+/* Text colors for different themes */
+.text-primary {
+  color: var(--primary-color);
+}
+
+.text-secondary {
+  color: var(--text-color-secondary);
+}
+
+.text-muted {
+  color: var(--muted-text-color);
+}
+
+/* Button styles to match the image */
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-color-hover);
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-outline:hover {
+  background-color: var(--accent-color-light);
 }
 
 .editor-container {
@@ -1927,4 +2000,204 @@ html.dark .ai-status-indicator {
   margin-top: 0.5rem;
   color: var(--error-color);
   font-size: 0.75rem;
+}
+
+/* Custom slider styles to match the image */
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"]::-ms-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+input[type="range"]::-ms-track {
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+/* Customized range track filled part */
+input[type="range"]::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, var(--primary-color) var(--range-progress, 0%), var(--border-color) var(--range-progress, 0%));
+}
+
+/* Make sure darker thumb in dark mode */
+[data-theme='dark'] input[type="range"]::-webkit-slider-thumb {
+  border-color: var(--bg-color);
+}
+
+[data-theme='dark'] input[type="range"]::-moz-range-thumb {
+  border-color: var(--bg-color);
+}
+
+[data-theme='dark'] input[type="range"]::-ms-thumb {
+  border-color: var(--bg-color);
+}
+
+/* Video player styling to match the image */
+.video-player {
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  box-shadow: var(--shadow-md);
+}
+
+.video-player video {
+  width: 100%;
+  border-radius: 12px;
+}
+
+.video-controls {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  gap: 10px;
+}
+
+.play-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+.play-button:hover {
+  background-color: var(--accent-color-hover);
+}
+
+/* Calendar styling to match the image */
+.calendar {
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: var(--bg-color);
+  box-shadow: var(--shadow-md);
+  padding: 16px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.calendar-day {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.calendar-day.today {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.calendar-day:hover:not(.today) {
+  background-color: var(--hover-bg);
+}
+
+/* Search bar styling to match the image */
+.search-bar {
+  background-color: var(--card-bg);
+  border-radius: 24px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
+}
+
+.search-bar input {
+  border: none;
+  background: transparent;
+  padding: 8px;
+  color: var(--text-color);
+  flex: 1;
+}
+
+.search-bar input:focus {
+  outline: none;
+}
+
+.search-bar-icon {
+  color: var(--text-color-secondary);
+}
+
+/* Profile avatar styling to match the image */
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--accent-color-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  font-size: 24px;
+}
+
+.profile-avatar svg {
+  width: 40px;
+  height: 40px;
+  stroke-width: 1.5;
 } 

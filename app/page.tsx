@@ -4,9 +4,14 @@ import React from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
-// Use dynamic import with SSR disabled for ThemeToggle
+// Use dynamic import with SSR disabled for ThemeToggle and ThemeShowcase
 const ThemeToggle = dynamic(
   () => import('./components/ThemeToggle'),
+  { ssr: false }
+);
+
+const ThemeShowcase = dynamic(
+  () => import('./components/ThemeShowcase'),
   { ssr: false }
 );
 
@@ -40,6 +45,11 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
+      </section>
+      
+      {/* Theme Showcase Section */}
+      <section className="py-16 bg-[var(--bg-secondary)]">
+        <ThemeShowcase />
       </section>
       
       <footer className="landing-footer">
