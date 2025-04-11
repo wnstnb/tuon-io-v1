@@ -54,7 +54,6 @@ function EditorPageContent() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [isSaving, setIsSaving] = useState(false);
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [hasInferredTitleForCurrentArtifact, setHasInferredTitleForCurrentArtifact] = useState<boolean>(false);
 
   // Basic UI interaction callbacks
   const toggleLeftPanel = useCallback(() => {
@@ -143,13 +142,16 @@ function EditorPageContent() {
   const inferTitle = useCallback(async (artifactId: string, contentForInference: Block[]) => {
     if (!user) return; // Need user context
 
+    if (title !== 'Untitled Artifact') {
+      console.log('Skipping title inference: Title is already set to:', title);
+      return; 
+    }
+
     const textContent = extractTextForInference(contentForInference);
 
     if (textContent.length < 20) {
       return; // Don't infer if content is too short
     }
-
-    setHasInferredTitleForCurrentArtifact(true); // Mark as attempted
 
     try {
       const response = await fetch('/api/infer-title', {
@@ -176,16 +178,13 @@ function EditorPageContent() {
       }
     } catch (error) {
       console.error('Error calling title inference API:', error);
-      // Optionally reset the flag if the call fails completely, allowing another try?
-      // setHasInferredTitleForCurrentArtifact(false); 
     }
-  }, [user]); // Dependency: user
+  }, [user, title]); // Dependency: user and title
 
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (artifactId: string, user: User) => {
     try {
       console.log(`Loading artifact data for ID: ${artifactId}`);
-      setHasInferredTitleForCurrentArtifact(false); // Reset inference flag for new artifact
       
       // Reset content to empty first to avoid showing old content
       setEditorContent([{
@@ -213,8 +212,6 @@ function EditorPageContent() {
         if (isPlaceholderTitle) {
           // Use a short delay to allow editor content to potentially render fully
           setTimeout(() => inferTitle(artifact.id, artifact.content), 500); 
-        } else {
-          setHasInferredTitleForCurrentArtifact(true); // Mark as done if loaded title is specific
         }
       }
     } catch (error) {
@@ -336,7 +333,7 @@ function EditorPageContent() {
           saveArtifact(); // Save the actual content
 
           // Check if we need to infer title for the first time
-          if (!hasInferredTitleForCurrentArtifact && currentArtifactId) {
+          if (title === 'Untitled Artifact' && currentArtifactId) {
              inferTitle(currentArtifactId, content); 
           }
         }
@@ -344,7 +341,7 @@ function EditorPageContent() {
       
       setSaveTimeout(timeout);
     }
-  }, [user, saveTimeout, saveArtifact, isSaving, hasInferredTitleForCurrentArtifact, currentArtifactId, inferTitle]); // Added dependencies
+  }, [user, saveTimeout, saveArtifact, isSaving, currentArtifactId, inferTitle, title]); // Added title, removed hasInferredTitle...
 
   // Listen for artifact selection events from FileExplorer
   useEffect(() => {
@@ -367,29 +364,6 @@ function EditorPageContent() {
       window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
     };
   }, [user, loadArtifact, currentArtifactId]);
-
-  // Listen for title updates from the title inference service -- REMOVED as inference is now handled differently
-  // useEffect(() => {
-  //   // Handler for title updates coming from the inference service
-  //   const handleTitleUpdated = (event: CustomEvent) => {
-  //     const { artifactId, title } = event.detail;
-      
-  //     // Only update the title if it's for the current artifact
-  //     if (artifactId && artifactId === currentArtifactId && title) {
-  //       console.log(`Received title update from inference: "${title}"`);
-  //       setTitle(title);
-  //       setSaveStatus('saved');
-  //     }
-  //   };
-
-  //   // Add event listener for the title update event
-  //   window.addEventListener('artifactTitleUpdated', handleTitleUpdated as EventListener);
-    
-  //   // Clean up
-  //   return () => {
-  //     window.removeEventListener('artifactTitleUpdated', handleTitleUpdated as EventListener);
-  //   };
-  // }, [currentArtifactId]);
 
   // Load artifact if ID is provided in URL and different from current
   useEffect(() => {
