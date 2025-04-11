@@ -2001,6 +2001,8 @@ html.dark .ai-status-indicator {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .search-history-item {
@@ -2526,4 +2528,33 @@ input[type="range"]::-webkit-slider-runnable-track {
   width: 100%;
   padding: 0;
   margin: 0;
+}
+
+/* Update search query styles to work as a button */
+.search-query-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  padding: 0.5rem 0; /* Adjust padding for button */
+  border: none; /* Remove default button border */
+  background: none; /* Remove default button background */
+  width: 100%; /* Make button take full width */
+  text-align: left; /* Align text to the left */
+  cursor: pointer; /* Add pointer cursor */
+  color: var(--text-color); /* Inherit text color */
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.5rem; /* Add margin to separate from results */
+}
+
+.search-query-button .query-icon {
+  /* Style the search icon if needed */
+}
+
+.search-query-button .query-text {
+  flex-grow: 1; /* Allow query text to take available space */
+}
+
+.search-query-button .search-timestamp {
+  margin-left: auto;
 } 
