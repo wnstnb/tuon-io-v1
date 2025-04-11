@@ -146,11 +146,9 @@ function EditorPageContent() {
     const textContent = extractTextForInference(contentForInference);
 
     if (textContent.length < 20) {
-      console.log('Content too short, skipping title inference.');
       return; // Don't infer if content is too short
     }
 
-    console.log(`Inferring title for artifact ${artifactId}...`);
     setHasInferredTitleForCurrentArtifact(true); // Mark as attempted
 
     try {
@@ -168,7 +166,6 @@ function EditorPageContent() {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.title) {
-          console.log(`Title inference successful: "${data.title}"`);
           setTitle(data.title); // Update local title state
           setSaveStatus('saved'); // Assume API updated DB, mark as saved
         } else {

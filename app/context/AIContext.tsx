@@ -4,6 +4,9 @@ import React, { createContext, useState, useContext, ReactNode, useEffect, useCa
 import { OpenAI } from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Block } from "@blocknote/core";
+import { MessageService } from '../lib/services/MessageService';
+import { ConversationService } from '../lib/services/ConversationService';
+import { UserService } from '../lib/services/UserService';
 
 // Define supported AI models
 export type AIModelType = 
@@ -355,57 +358,79 @@ export function AIProvider({ children }: AIProviderProps) {
   ) => {
     if (!currentConversation) return;
     
+    let currentUser: { id: string } | null = null;
+    try {
+      currentUser = await UserService.getCurrentUser();
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+      // Optionally, handle the case where the user isn't available
+    }
+    
     try {
       setIsLoading(true);
       
       // Clone current conversation to avoid mutation issues
       const updatedConversation = { ...currentConversation };
       
-      // Add user message to conversation
+      // Prepare user message object
+      const userMessage: Message = {
+        role: 'user',
+        content,
+        contentType: imageDataUrl ? 'text-with-image' : 'text',
+        imageUrl: undefined, // Initialize as undefined, will be updated after upload
+      };
+      
+      // Add user message to local state
       updatedConversation.messages = [
         ...updatedConversation.messages,
-        {
-          role: 'user',
-          content,
-          contentType: imageDataUrl ? 'text-with-image' : 'text',
-          imageUrl: undefined, // Initialize as undefined instead of null
-        }
+        userMessage
       ];
       
       // Handle image upload if provided
-      if (imageDataUrl) {
-        // Import image service dynamically
-        const { ImageService } = await import('../lib/services/ImageService');
+      if (imageDataUrl && currentUser) {
+        // Import image service dynamically (already done below, potentially redundant)
+        // const { ImageService } = await import('../lib/services/ImageService'); 
         try {
-          // Extract base64 data from data URL
-          const base64Data = imageDataUrl.split(',')[1];
-          
-          // Get current user ID for the upload
-          const { UserService } = await import('../lib/services/UserService');
-          const currentUser = await UserService.getCurrentUser();
-          
-          if (!currentUser || !currentUser.id) {
-            console.error('Cannot upload image: No authenticated user');
-            throw new Error('User authentication required to upload images');
-          }
-          
           // Upload the image and get the path/URL
+          const { ImageService } = await import('../lib/services/ImageService'); // Keep dynamic import here
           const imagePath = await ImageService.uploadImage(
             currentUser.id,
-            imageDataUrl, // Pass the full data URL, the service will handle extraction
+            imageDataUrl, 
             'conversation-images',
-            currentConversation.id // Use conversation ID as the path
+            currentConversation.id 
           );
           console.log('Image uploaded successfully:', imagePath);
           
-          // Update the user message with the image URL/path
+          // Update the user message object with the image URL/path
+          userMessage.imageUrl = imagePath;
+          // Ensure the message in the array also gets updated (might need if array was deeply cloned)
           updatedConversation.messages[updatedConversation.messages.length - 1].imageUrl = imagePath;
         } catch (error) {
           console.error('Error uploading image:', error);
+          // Handle image upload failure if necessary (e.g., remove image data or show error)
+        }
+      } else if (imageDataUrl && !currentUser) {
+        console.error('Cannot upload image: No authenticated user');
+        // Handle case where image is provided but user is not logged in
+      }
+
+      // --- Save User Message to DB ---
+      if (currentUser) {
+        try {
+          await MessageService.createMessage(
+            currentConversation.id,
+            userMessage, // Use the prepared userMessage object
+            currentUser.id
+          );
+          // Update conversation timestamp
+          await ConversationService.updateConversationTimestamp(currentConversation.id);
+        } catch (error) {
+          console.error('Error saving user message to database:', error);
         }
       }
+      // ------------------------------
       
-      // Update conversation in state
+      // Update conversation in state (local UI update)
       setCurrentConversation(updatedConversation);
       updateConversationInHistory(updatedConversation);
       
@@ -487,15 +512,34 @@ export function AIProvider({ children }: AIProviderProps) {
           // If this was an auto-detected search (not explicit /search command),
           // add a message to inform the user that a search was performed
           if (!explicitSearch && intentAnalysis?.needsWebSearch) {
-            // Add a system message to let the user know we performed a search
-            updatedConversation.messages.push({
+            // Prepare system message object
+            const systemSearchMessage: Message = {
               role: 'system',
               content: `I performed a web search for "${intentAnalysis.searchQuery}" to help answer your question.`,
-            });
+            };
             
-            // Update conversation in state
-            setCurrentConversation(updatedConversation);
-            updateConversationInHistory(updatedConversation);
+            // Add a system message to let the user know we performed a search (local state)
+            updatedConversation.messages.push(systemSearchMessage);
+            
+            // --- Save System Search Message to DB (Optional) ---
+            if (currentUser) {
+              try {
+                await MessageService.createMessage(
+                  currentConversation.id,
+                  systemSearchMessage,
+                  currentUser.id
+                );
+                // Update conversation timestamp
+                await ConversationService.updateConversationTimestamp(currentConversation.id);
+              } catch (error) {
+                console.error('Error saving system search message to database:', error);
+              }
+            }
+            // -----------------------------------------------------
+            
+            // Update conversation in state (local UI update)
+            setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
+            updateConversationInHistory({...updatedConversation});
           }
         }
           
@@ -507,16 +551,35 @@ export function AIProvider({ children }: AIProviderProps) {
           editorContext?.editorContent
         );
         
-        // Add AI response to conversation
-        updatedConversation.messages.push({
+        // Prepare AI response message object
+        const assistantMessage: Message = {
           role: 'assistant',
           content: creatorResponse.chatContent,
-          model: currentModel
-        });
+          model: currentModel // Use the current model from state
+        };
         
-        // Update conversation in state again
-        setCurrentConversation(updatedConversation);
-        updateConversationInHistory(updatedConversation);
+        // Add AI response to conversation (local state)
+        updatedConversation.messages.push(assistantMessage);
+        
+        // --- Save Assistant Message to DB ---
+        if (currentUser) {
+          try {
+            await MessageService.createMessage(
+              currentConversation.id,
+              assistantMessage,
+              currentUser.id
+            );
+            // Update conversation timestamp
+            await ConversationService.updateConversationTimestamp(currentConversation.id);
+          } catch (error) {
+            console.error('Error saving assistant message to database:', error);
+          }
+        }
+        // ----------------------------------
+        
+        // Update conversation in state again (local UI update)
+        setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
+        updateConversationInHistory({...updatedConversation});
         
         // Check if this is the first message exchange and infer a title if it is
         if (updatedConversation.messages.length === 2 && updatedConversation.title === 'New Conversation') {
@@ -548,6 +611,19 @@ export function AIProvider({ children }: AIProviderProps) {
                 };
                 setCurrentConversation(titleUpdatedConversation);
                 updateConversationInHistory(titleUpdatedConversation);
+                
+                // --- Save Updated Title to DB ---
+                if (currentUser) { // Check if user context is available
+                  try {
+                    await ConversationService.updateConversationTitle(
+                      updatedConversation.id, // Use the correct conversation ID
+                      result.title
+                    );
+                  } catch(error) {
+                    console.error('Error updating conversation title in database:', error);
+                  }
+                }
+                // --------------------------------
               }
             }
           } catch (error) {
@@ -569,16 +645,35 @@ export function AIProvider({ children }: AIProviderProps) {
       } catch (error) {
         console.error('Error generating AI response:', error);
         
-        // Add error message to conversation
-        updatedConversation.messages.push({
+        // Prepare error message object
+        const assistantErrorMessage: Message = {
           role: 'assistant',
           content: 'I apologize, but I encountered an error while processing your request. Please try again.',
-          model: currentModel
-        });
+          model: currentModel // Use the current model from state
+        };
         
-        // Update conversation in state
-        setCurrentConversation(updatedConversation);
-        updateConversationInHistory(updatedConversation);
+        // Add error message to conversation (local state)
+        updatedConversation.messages.push(assistantErrorMessage);
+        
+        // --- Save Assistant Error Message to DB (Optional) ---
+        if (currentUser) {
+          try {
+            await MessageService.createMessage(
+              currentConversation.id,
+              assistantErrorMessage,
+              currentUser.id
+            );
+            // Update conversation timestamp
+            await ConversationService.updateConversationTimestamp(currentConversation.id);
+          } catch (error) {
+            console.error('Error saving assistant error message to database:', error);
+          }
+        }
+        // -----------------------------------------------------
+        
+        // Update conversation in state (local UI update)
+        setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
+        updateConversationInHistory({...updatedConversation});
       }
     } catch (error) {
       console.error('Error sending message:', error);
