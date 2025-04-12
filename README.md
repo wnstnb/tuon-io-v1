@@ -2,6 +2,21 @@
 
 AI-powered content creation and management platform that stores your content in one place and empowers you to craft, enhance, and organize your work with precision.
 
+## Features
+
+- **AI-Powered Content Creation** - Seamlessly create and edit content with AI assistance that adapts to your needs
+- **Intelligent Intent Analysis** - System automatically determines whether to respond in chat or edit your document based on your intent
+- **Multi-Model AI Integration** - Choose between OpenAI (GPT-4o, GPT-o3-mini) and Google (Gemini 2.0, 2.5) models for different tasks
+- **Rich Text Document Editor** - Create structured documents with headings, lists, tables, and code blocks
+- **Image Support** - Upload and embed images directly in your documents with automatic storage handling
+- **Web Search Integration** - Research topics without leaving the app using ExaSearch for up-to-date information
+- **Semantic Content Search** - Find exactly what you need across all your documents with vector-based search
+- **File Management System** - Organize your documents with automatic tagging and filing
+- **Three-Pane Interface** - Optimized workspace with productivity tools, content editor, and research capabilities
+- **Real-Time Syncing** - All content automatically saved and accessible across devices with Supabase backend
+- **Document Versioning** - Track changes and maintain version history of your content
+- **Secure Authentication** - Email-based one-time password authentication through Supabase
+
 ## Getting Started
 
 ### Prerequisites

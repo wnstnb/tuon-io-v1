@@ -10,12 +10,13 @@ import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
 import RightPane from '../components/RightPane';
 import GlobalSearch from '../components/GlobalSearch';
-import { type Block } from "@blocknote/core";
+import { type Block, type PartialBlock } from "@blocknote/core";
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
 import { User } from '@supabase/supabase-js';
 import { ArtifactService } from '../lib/services/ArtifactService';
 import { debounce, throttle } from 'lodash-es';
+import { ImageService } from '../lib/services/ImageService';
 
 // Use dynamic import with SSR disabled for ThemeToggle
 const ThemeToggle = dynamic(
@@ -156,6 +157,55 @@ function EditorPageContent() {
       return '';
     }).join('\n').trim();
   };
+
+  // --- Helper Function to Resolve Image Paths (Wrapped in useCallback, Type-Safe) ---
+  const resolveImagePathsToUrls = useCallback(async (blocks: Block[]): Promise<Block[]> => {
+    const processedBlocks: Block[] = [];
+
+    const isBlockArray = (content: any): content is Block[] => {
+       return Array.isArray(content) && content.length > 0 &&
+              content.every(item => typeof item === 'object' && item !== null && 'id' in item && 'type' in item);
+    }
+
+    for (const block of blocks) {
+      let currentBlock: Block = JSON.parse(JSON.stringify(block)); // Use a different name for clarity
+
+      // Process image blocks
+      if (currentBlock.type === 'image' && currentBlock.props?.url) {
+        const url = currentBlock.props.url;
+        if (typeof url === 'string' && (url.startsWith('artifact-images/') || url.startsWith('conversation-images/'))) {
+          try {
+            const authenticatedUrl = await ImageService.getAuthenticatedUrl(url);
+            // Update the props on the currentBlock being processed
+            currentBlock.props = { ...(currentBlock.props || {}), url: authenticatedUrl };
+          } catch (error) {
+            console.error(`Failed to get authenticated URL for ${url}:`, error);
+          }
+        }
+      }
+
+      // Process children
+      if (currentBlock.children && currentBlock.children.length > 0) {
+         // Update children on the currentBlock
+         currentBlock.children = await resolveImagePathsToUrls([...currentBlock.children]);
+      }
+
+      // Process content if it is Block[]
+      if (isBlockArray(currentBlock.content)) {
+          const nestedBlocks = currentBlock.content;
+          const processedNestedBlocks = await resolveImagePathsToUrls([...nestedBlocks]);
+          // Update content on the currentBlock. TypeScript might still complain,
+          // but this is logically correct after the type guard.
+          // We might need an 'any' cast as a last resort if TS can't reconcile it.
+          currentBlock.content = processedNestedBlocks as any; // Use 'as any' to bypass stubborn TS check here
+      }
+
+      processedBlocks.push(currentBlock);
+    }
+
+    return processedBlocks;
+  }, []);
+  // --- END Helper Function ---
 
   // --- NEW: Core Sync Logic (to be throttled) ---
   // Renamed to Core, removed useCallback as it's handled by the ref pattern now
@@ -473,12 +523,12 @@ function EditorPageContent() {
         setIsArtifactPersisted(false); // Explicitly not persisted
       }
 
-      // 4. Update Component State
+      // 4. Update Component State with RAW content
       if (isMounted.current) {
-        console.log(`Setting editor state: Title=${loadedTitle}, Content blocks=${loadedContent.length}`);
+        console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent.length}`);
         setTitle(loadedTitle);
-        setEditorContent(loadedContent);
-        setIsDirty(false); // Loaded state is not dirty initially
+        setEditorContent(loadedContent); // <-- Set RAW content here
+        setIsDirty(false);
         setIsSyncPending(finalSyncPending);
 
         // Save the loaded state back to local storage as the initial baseline
@@ -515,7 +565,7 @@ function EditorPageContent() {
         setLastSyncError("Unexpected error loading artifact.");
       }
     }
-  }, [inferTitle, user]); // Dependencies adjusted
+  }, [inferTitle, user]); // REMOVED resolveImagePathsToUrls from dependencies here
 
   // Listen for artifact selection events from FileExplorer
   useEffect(() => {
@@ -585,15 +635,81 @@ function EditorPageContent() {
     // Removed syncToDatabase dependency
   }, [isSyncPending, debouncedLocalSave, throttledDbSync]);
 
-  // Initialize: Load or setup new artifact (logic adjusted for new loading)
+  // --- NEW useEffect Hook for Processing Image URLs ---
+  useEffect(() => {
+    // Only run if component is mounted and content exists
+    if (!isMounted.current || !editorContent || editorContent.length === 0) {
+      return;
+    }
+
+    let needsProcessing = false;
+    let processingInProgress = false;
+
+    // Recursive check function
+    const checkNeedsProcessing = (blocks: Readonly<Block[]>) => {
+      for (const block of blocks) {
+        if (needsProcessing) return;
+        if (block.type === 'image' && block.props?.url && typeof block.props.url === 'string' &&
+            (block.props.url.startsWith('artifact-images/') || block.props.url.startsWith('conversation-images/'))) {
+          needsProcessing = true;
+          return;
+        }
+        if (block.children && block.children.length > 0) checkNeedsProcessing(block.children);
+        // Basic check for block array content
+        if (Array.isArray(block.content) && block.content.length > 0 && typeof block.content[0] === 'object' && 'type' in block.content[0]) {
+            // Use 'as any' here for the recursive *check* to satisfy linter
+            checkNeedsProcessing(block.content as any);
+        }
+      }
+    };
+
+    checkNeedsProcessing(editorContent);
+
+    // If unprocessed paths exist and we aren't already processing
+    if (needsProcessing && !processingInProgress) {
+      console.log("useEffect: Detected unprocessed image paths. Starting resolution...");
+      processingInProgress = true; // Set flag
+
+      resolveImagePathsToUrls(editorContent) // Use the stable callback
+        .then(processedContent => {
+          // Check mount status again *inside* the promise resolution
+          if (isMounted.current) {
+            // Only update if the content actually changed after processing
+            if (JSON.stringify(processedContent) !== JSON.stringify(editorContent)) {
+               console.log("useEffect: Image paths resolved. Updating editor content.");
+               setEditorContent(processedContent);
+            } else {
+               console.log("useEffect: Processed content is identical to current. Skipping update.");
+            }
+          } else {
+             console.log("useEffect: Component unmounted before image processing completed.");
+          }
+        })
+        .catch(error => {
+          console.error("useEffect: Error processing image URLs:", error);
+          // Optionally set an error state here
+        })
+        .finally(() => {
+           processingInProgress = false; // Reset flag
+        });
+    } else if (!needsProcessing) {
+       // console.log("useEffect: editorContent does not require image processing."); // Optional log
+    }
+
+  }, [editorContent, resolveImagePathsToUrls]); // Run when content or the (stable) function changes
+  // --- END NEW useEffect Hook ---
+
+  // Initialize: Load or setup new artifact
   useEffect(() => {
     if (artifactIdParam && user) {
       console.log('Initial load based on URL artifactId');
+      // Call loadArtifact here if needed
       loadArtifact(artifactIdParam, user);
     } else if (!artifactIdParam && user && currentArtifactId) {
       // Handle case where there's no artifactId in URL (new artifact)
       console.log('Initial setup for new artifact with ID:', currentArtifactId);
       if (isMounted.current) {
+        // Set initial state for a new artifact
         setTitle('Untitled Artifact');
         setEditorContent([]);
         setIsDirty(false);
@@ -601,11 +717,10 @@ function EditorPageContent() {
         setIsSyncing(false);
         setLastSyncError(null);
         setIsArtifactPersisted(false);
-        // Clear any potential leftover local storage for this new ID (already done in useState init)
       }
     }
-    // Intentionally omitting loadArtifact from deps here to prevent re-running on loadArtifact changes
-  }, [artifactIdParam, user, currentArtifactId]);
+    // Removed loadArtifact from dependencies to prevent loop on new artifact setup
+  }, [artifactIdParam, user, currentArtifactId]); // <-- loadArtifact REMOVED
 
   // Memoize editor props (Ensure handleContentChange/handleTitleChange are stable via useCallback)
   const editorProps = useMemo(() => {
@@ -624,11 +739,11 @@ function EditorPageContent() {
 
   // --- UPDATED: Save Status Display Logic ---
   const getSaveStatusMessage = (): string => {
-      if (lastSyncError) return `Error: ${lastSyncError}`;
-      if (isSyncing) return "Syncing to server...";
-      if (isSyncPending) return "Changes saved locally, sync pending...";
-      if (isDirty) return "Saving locally..."; // Indicates changes made, debounce timer running
-      if (!isDirty && !isSyncPending) return "All changes saved"; // Idle state, fully synced
+      if (lastSyncError) return `❌: ${lastSyncError}`;
+      if (isSyncing) return "☁️"; //Syncing to server...
+      if (isSyncPending) return "⏳"; //Changes saved locally, sync pending...
+      if (isDirty) return "💾"; // Indicates changes made, debounce timer running
+      if (!isDirty && !isSyncPending) return "✅"; // Idle state, fully synced
       return ""; // Should ideally not happen
   };
 
