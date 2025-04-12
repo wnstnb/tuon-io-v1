@@ -158,6 +158,47 @@ function EditorPageContent() {
     }).join('\n').trim();
   };
 
+  // --- Helper Function to Replace Signed URLs with Relative Paths before Saving ---
+  const replaceSignedUrlsWithRelativePaths = (blocks: Block[]): Block[] => {
+    const processedBlocks: Block[] = [];
+
+    const isBlockArray = (content: any): content is Block[] => {
+      return Array.isArray(content) && content.length > 0 &&
+             content.every(item => typeof item === 'object' && item !== null && 'id' in item && 'type' in item);
+    }
+
+    for (const block of blocks) {
+      let currentBlock: Block = JSON.parse(JSON.stringify(block)); // Deep copy
+
+      // Process image blocks
+      if (currentBlock.type === 'image' && (currentBlock.props as any)?.originalUrl) {
+        // Replace the signed URL with the original relative path for saving
+        currentBlock.props = { 
+          ...(currentBlock.props || {}), 
+          url: (currentBlock.props as any).originalUrl // Use originalUrl for saving
+        } as any;
+        // Optionally remove originalUrl before saving if desired, but keeping it might be useful
+        // delete (currentBlock.props as any).originalUrl;
+      }
+
+      // Process children recursively
+      if (currentBlock.children && currentBlock.children.length > 0) {
+        currentBlock.children = replaceSignedUrlsWithRelativePaths([...currentBlock.children]);
+      }
+
+      // Process content if it is Block[] recursively
+      if (isBlockArray(currentBlock.content)) {
+        const nestedBlocks = currentBlock.content;
+        currentBlock.content = replaceSignedUrlsWithRelativePaths([...nestedBlocks]) as any;
+      }
+
+      processedBlocks.push(currentBlock);
+    }
+
+    return processedBlocks;
+  };
+  // --- END Helper Function ---
+
   // --- Helper Function to Resolve Image Paths (Wrapped in useCallback, Type-Safe) ---
   const resolveImagePathsToUrls = useCallback(async (blocks: Block[]): Promise<Block[]> => {
     const processedBlocks: Block[] = [];
@@ -168,36 +209,42 @@ function EditorPageContent() {
     }
 
     for (const block of blocks) {
-      let currentBlock: Block = JSON.parse(JSON.stringify(block)); // Use a different name for clarity
+      let currentBlock: Block = JSON.parse(JSON.stringify(block)); // Deep copy to avoid modifying original state directly
 
       // Process image blocks
       if (currentBlock.type === 'image' && currentBlock.props?.url) {
         const url = currentBlock.props.url;
-        if (typeof url === 'string' && (url.startsWith('artifact-images/') || url.startsWith('conversation-images/'))) {
+        // Only process if it looks like a relative path and hasn't been processed already (doesn't have originalUrl)
+        if (typeof url === 'string' && 
+            (url.startsWith('artifact-images/') || url.startsWith('conversation-images/')) && 
+            !(currentBlock.props as any).originalUrl) {
           try {
-            const authenticatedUrl = await ImageService.getAuthenticatedUrl(url);
+            const relativePath = url; // Keep original path
+            const signedUrl = await ImageService.getAuthenticatedUrl(relativePath); // Gets signed URL
             // Update the props on the currentBlock being processed
-            currentBlock.props = { ...(currentBlock.props || {}), url: authenticatedUrl };
+            currentBlock.props = { 
+              ...(currentBlock.props || {}), 
+              url: signedUrl,          // Update URL for display
+              originalUrl: relativePath // Store the original relative path
+            } as any;
           } catch (error) {
             console.error(`Failed to get authenticated URL for ${url}:`, error);
+            // Keep the original relative path in props.url if resolution fails
           }
         }
       }
 
-      // Process children
+      // Process children recursively
       if (currentBlock.children && currentBlock.children.length > 0) {
-         // Update children on the currentBlock
          currentBlock.children = await resolveImagePathsToUrls([...currentBlock.children]);
       }
 
-      // Process content if it is Block[]
+      // Process content if it is Block[] recursively
       if (isBlockArray(currentBlock.content)) {
           const nestedBlocks = currentBlock.content;
-          const processedNestedBlocks = await resolveImagePathsToUrls([...nestedBlocks]);
-          // Update content on the currentBlock. TypeScript might still complain,
-          // but this is logically correct after the type guard.
-          // We might need an 'any' cast as a last resort if TS can't reconcile it.
-          currentBlock.content = processedNestedBlocks as any; // Use 'as any' to bypass stubborn TS check here
+          // Ensure we pass copies to avoid mutation issues if the same block appears multiple times
+          const processedNestedBlocks = await resolveImagePathsToUrls([...nestedBlocks.map(b => JSON.parse(JSON.stringify(b)))]);
+          currentBlock.content = processedNestedBlocks as any;
       }
 
       processedBlocks.push(currentBlock);
