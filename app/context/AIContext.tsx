@@ -7,6 +7,8 @@ import { Block } from "@blocknote/core";
 import { MessageService } from '../lib/services/MessageService';
 import { ConversationService } from '../lib/services/ConversationService';
 import { UserService } from '../lib/services/UserService';
+import { CreatorAgentService } from '../lib/services/CreatorAgentService';
+import { useSupabase } from '../context/SupabaseContext';
 
 // Define supported AI models
 export type AIModelType = 
@@ -61,6 +63,7 @@ export interface EditorContext {
   cursorPosition?: number;
   editorContent?: Block[];  // Full document content from the editor
   selectedBlockIds?: string[]; // IDs of any selected blocks
+  markdown?: string; // Add the optional markdown string representation
 }
 
 // Define search options type
@@ -110,6 +113,7 @@ export function AIProvider({ children }: AIProviderProps) {
   const [conversationHistory, setConversationHistory] = useState<Conversation[]>([]);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const { user: currentUser } = useSupabase();
 
   // Helper function to get AI response based on model type
   const getAIResponse = async (conversation: Conversation, content: string, imageDataUrl?: string | null): Promise<string> => {
@@ -488,8 +492,6 @@ export function AIProvider({ children }: AIProviderProps) {
       
       // Generate AI response using creator agent
       try {
-        const { CreatorAgentService } = await import('../lib/services/CreatorAgentService');
-        
         // Get recent conversation history for context (limit to 10 messages)
         const conversationContext = updatedConversation.messages
           .slice(-10)
@@ -544,12 +546,17 @@ export function AIProvider({ children }: AIProviderProps) {
         }
           
         // Process with creator agent
+        console.log('AIContext: Calling CreatorAgentService.processRequest');
+        console.log('AIContext: editorContext received:', editorContext);
+        
         const creatorResponse = await CreatorAgentService.processRequest(
           content,
           intentAnalysis,
           conversationContext,
-          editorContext?.editorContent
+          editorContext?.markdown
         );
+        
+        console.log('AIContext: Received response from CreatorAgentService:', creatorResponse);
         
         // Prepare AI response message object
         const assistantMessage: Message = {
@@ -632,15 +639,22 @@ export function AIProvider({ children }: AIProviderProps) {
           }
         }
         
-        // If we have editor content and intent is EDITOR, dispatch it to editor
+        // --- Dispatch editor content --- 
+        // Check if we have editor content (now a markdown string) and intent is EDITOR
         if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
-          // Create a custom event to send the editor content to the editor component
+          console.log('AIContext: Dispatching editor:setContent event with markdown string.');
+          // Create a custom event to send the EDITOR content MARKDOWN STRING to the editor component
           const editorContentEvent = new CustomEvent('editor:setContent', {
             detail: {
-              content: creatorResponse.editorContent
+              content: creatorResponse.editorContent // Pass the markdown string directly
             }
           });
           window.dispatchEvent(editorContentEvent);
+        } else if (creatorResponse.editorContent) {
+          console.log('AIContext: Editor content received but intent was not EDITOR. Discarding.', {
+             intent: intentAnalysis.destination,
+             content: creatorResponse.editorContent.substring(0, 100) + '...'
+          });
         }
       } catch (error) {
         console.error('Error generating AI response:', error);

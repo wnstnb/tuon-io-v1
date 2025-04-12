@@ -88,48 +88,81 @@ const BlockNoteEditor = dynamic(
           }
         });
         
-        // Register onChange handler
+        // Handle editor:setContent
+        React.useEffect(() => {
+          const handleSetContent = async (event: CustomEvent) => {
+            if (event.detail && typeof event.detail.content === 'string') {
+              const markdownString = event.detail.content;
+              if (!markdownString) {
+                editor.replaceBlocks(editor.document, []);
+                if (props.onChange) props.onChange([]); // Notify parent of clear
+                return;
+              }
+              try {
+                // Use props.setAiStatus if available
+                if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Parsing content...' });
+                const newBlocks = await editor.tryParseMarkdownToBlocks(markdownString);
+                editor.replaceBlocks(editor.document, newBlocks);
+                // Use props.onChange if available
+                if (props.onChange) {
+                  props.onChange(newBlocks); // Notify parent of update
+                }
+                if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
+              } catch (error) {
+                console.error('Editor (Inner): Error parsing markdown:', error);
+                if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error parsing content' });
+              }
+            }
+          };
+          window.addEventListener('editor:setContent', handleSetContent as unknown as EventListener);
+          return () => window.removeEventListener('editor:setContent', handleSetContent as unknown as EventListener);
+        // Add necessary props to dependency array
+        }, [editor, props.onChange, props.setAiStatus]); 
+
+        // Handle editor:requestContent
+        React.useEffect(() => {
+          const handleContentRequest = async () => {
+            let markdownString: string | null = null;
+            let errorMsg: string | null = null;
+            // Use props.currentContent if available
+            const currentBlocks = props.currentContent || editor.document;
+            try {
+              markdownString = await editor.blocksToMarkdownLossy(currentBlocks);
+              // Use props.onContentAccessRequest if available
+              if (props.onContentAccessRequest) {
+                props.onContentAccessRequest(currentBlocks);
+              }
+            } catch (error) {
+              console.error('Editor (Inner): Error converting blocks to markdown:', error);
+              errorMsg = 'Failed to get markdown content';
+            }
+            const responseEvent = new CustomEvent('editor:contentResponse', {
+              detail: { markdown: markdownString, error: errorMsg }
+            });
+            window.dispatchEvent(responseEvent);
+          };
+          window.addEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
+          return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
+        // Add necessary props to dependency array
+        }, [editor, props.onContentAccessRequest, props.currentContent]); 
+
+        // Regular onChange handler (already uses props correctly)
         React.useEffect(() => {
           if (!props.onChange) return;
-          
-          // Create a debounce implementation for editor changes
           let debounceTimeout: NodeJS.Timeout | null = null;
-          const debounceDelay = 3000; // 3 seconds
-          
-          // Define the function to be debounced
+          const debounceDelay = 3000;
           const debouncedOnChange = () => {
-            // Only update when content has meaningful changes
             const blocks = editor.document;
             props.onChange(blocks);
-            console.log(`Editor.tsx: Debounced onChange triggered for artifact ${props.artifactId}`);
           };
-
-          // Define the handler that resets the debounce timer
           const handleChange = () => {
-            // Clear any existing timeout
-            if (debounceTimeout) {
-              clearTimeout(debounceTimeout);
-            }
-            
-            // Set a new timeout
+            if (debounceTimeout) clearTimeout(debounceTimeout);
             debounceTimeout = setTimeout(debouncedOnChange, debounceDelay);
           };
-          
-          // Register the handler with the editor
           editor.onChange(handleChange);
-          
-          // Cleanup function
-          return () => {
-            if (debounceTimeout) {
-              clearTimeout(debounceTimeout);
-            }
-            // Also remove the listener if editor instance supports it (depends on BlockNote API)
-            // If BlockNote doesn't provide a specific unregister method, this cleanup might be sufficient
-            // editor.offChange(handleChange); // Example, if such a method existed
-          };
-          // Rerun effect if the editor instance or the onChange prop changes
+          return () => { if (debounceTimeout) clearTimeout(debounceTimeout); };
         }, [editor, props.onChange]);
-        
+
         return (
           <BlockNoteView 
             editor={editor} 
@@ -158,199 +191,37 @@ interface EditorProps {
 }
 
 export default function Editor({ initialContent, onChange, artifactId, userId, onContentAccessRequest }: EditorProps) {
-  // State to track content updates from AI
+  // State to track content updates from AI (might be needed for keying/remounting)
   const [aiContent, setAiContent] = React.useState<Block[] | null>(null);
-  // State to track current editor content
+  // State to track current editor content (needed for onContentAccessRequest)
   const [currentContent, setCurrentContent] = React.useState<Block[]>(initialContent || []);
-  // State to show status indicator for AI operations
+  // State to show status indicator for AI operations 
   const [aiStatus, setAiStatus] = React.useState<{
     isProcessing: boolean;
     operation?: string;
     message?: string;
   }>({ isProcessing: false });
   
-  // Debugging log to verify when props change
+  // Update currentContent when initialContent changes (e.g., loading from DB)
   React.useEffect(() => {
-    console.log(`Editor received new content for artifact: ${artifactId}`);
+    setCurrentContent(initialContent || []);
+  }, [initialContent]);
+
+  // Debugging log
+  React.useEffect(() => {
+    console.log(`Editor (Outer) received new initialContent for artifact: ${artifactId}`);
   }, [initialContent, artifactId]);
   
-  // Listen for editor:update events from the AI
-  React.useEffect(() => {
-    const handleEditorUpdate = (event: CustomEvent) => {
-      console.log('Editor received update event:', event.detail);
-      if (event.detail && event.detail.blocks) {
-        const { blocks, operation, metadata, userInput, hadPriorContent } = event.detail;
-        
-        // Show status indicator
-        setAiStatus({
-          isProcessing: true,
-          operation,
-          message: getOperationMessage(operation)
-        });
-        
-        // Handle operations differently based on type
-        switch (operation) {
-          case 'CREATE':
-            // For create operations, just replace the content
-            console.log('Editor: Creating new content');
-            setAiContent(blocks);
-            break;
-            
-          case 'REPLACE':
-            // For replace operations, replace all content
-            console.log('Editor: Replacing all content');
-            setAiContent(blocks);
-            break;
-            
-          case 'MODIFY':
-          case 'EXPAND':
-            // For modifications, we currently replace the entire content
-            // In a more sophisticated implementation, we could merge or update specific parts
-            console.log(`Editor: Modifying content (${operation})`);
-            setAiContent(blocks);
-            break;
-            
-          case 'REFORMAT':
-            // For reformatting, we preserve content but change structure
-            console.log('Editor: Reformatting content');
-            setAiContent(blocks);
-            break;
-            
-          case 'DELETE':
-            // For delete operations, we might only remove specific blocks
-            // For now, we just replace everything
-            console.log('Editor: Deleting content');
-            setAiContent(blocks);
-            break;
-            
-          default:
-            // Default to replacement for unknown operations
-            console.log('Editor: Unspecified operation, defaulting to replacement');
-            setAiContent(blocks);
-            break;
-        }
-        
-        // Trigger save immediately after AI content is applied to the editor
-        if (onChange) {
-          console.log('Editor: Triggering autosave after AI content insertion');
-          onChange(blocks);
-        }
-        
-        // Clear status after a delay
-        setTimeout(() => {
-          setAiStatus({ isProcessing: false });
-        }, 2000);
-      }
-    };
-    
-    // Helper to get user-friendly operation messages
-    const getOperationMessage = (operation?: string): string => {
-      switch (operation) {
-        case 'CREATE': return 'Creating new content...';
-        case 'REPLACE': return 'Replacing content...';
-        case 'MODIFY': return 'Modifying content...';
-        case 'EXPAND': return 'Expanding content...';
-        case 'REFORMAT': return 'Reformatting content...';
-        case 'DELETE': return 'Removing content...';
-        default: return 'Updating content...';
-      }
-    };
-    
-    // Add event listener with type assertion
-    window.addEventListener('editor:update', handleEditorUpdate as EventListener);
-    
-    // Handle editor:setContent events from AIContext
-    const handleSetContent = (event: CustomEvent) => {
-      console.log('Editor received setContent event:', event.detail);
-      if (event.detail && event.detail.content) {
-        const content = event.detail.content;
-        
-        // Show status indicator
-        setAiStatus({
-          isProcessing: true,
-          operation: 'CREATE',
-          message: 'Creating new content...'
-        });
-        
-        // Update editor content
-        console.log('Editor: Setting new content from AIContext');
-        setAiContent(content);
-        
-        // Trigger save
-        if (onChange) {
-          console.log('Editor: Triggering autosave after content update');
-          onChange(content);
-        }
-        
-        // Clear status after a delay
-        setTimeout(() => {
-          setAiStatus({ isProcessing: false });
-        }, 2000);
-      }
-    };
-    
-    // Add event listener for editor:setContent
-    window.addEventListener('editor:setContent', handleSetContent as EventListener);
-    
-    // Clean up
-    return () => {
-      window.removeEventListener('editor:update', handleEditorUpdate as EventListener);
-      window.removeEventListener('editor:setContent', handleSetContent as EventListener);
-    };
-  }, [onChange]);
-
-  // Expose current content when requested
-  React.useEffect(() => {
-    // Setup custom event listener for content access requests
-    const handleContentRequest = () => {
-      // Send the current content back via a custom event
-      const responseEvent = new CustomEvent('editor:contentResponse', {
-        detail: {
-          content: currentContent
-        }
-      });
-      window.dispatchEvent(responseEvent);
-      
-      // Also call the callback if provided
-      if (onContentAccessRequest) {
-        onContentAccessRequest(currentContent);
-      }
-    };
-
-    window.addEventListener('editor:requestContent', handleContentRequest);
-    
-    return () => {
-      window.removeEventListener('editor:requestContent', handleContentRequest);
-    };
-  }, [currentContent, onContentAccessRequest]);
-  
-  // Ensure initialContent is always an array with at least one paragraph block
+  // Simplified initial content logic for passing down
   const safeInitialContent = React.useMemo(() => {
-    // If we have AI content, prioritize it
+    // AI content still takes precedence if it exists (e.g., from setContent event)
     if (aiContent) {
       return aiContent;
-    }
-    
-    if (!initialContent || !Array.isArray(initialContent) || initialContent.length === 0) {
-      // Create a properly typed empty paragraph block
-      const defaultBlock: Block = {
-        id: "default",
-        type: "paragraph",
-        props: { 
-          textColor: "default", 
-          backgroundColor: "default", 
-          textAlignment: "left" 
-        },
-        content: [],
-        children: []
-      };
-      
-      return [defaultBlock];
     }
     return initialContent;
   }, [initialContent, aiContent]);
 
-  // Reset AI content when artifact changes
+  // Reset AI content when artifact changes (still seems relevant)
   React.useEffect(() => {
     setAiContent(null);
   }, [artifactId]);
@@ -364,20 +235,21 @@ export default function Editor({ initialContent, onChange, artifactId, userId, o
         </div>
       )}
       <ThemeAwareEditor 
-        // Create a more specific key that will force a remount when content changes
-        key={`editor-${artifactId}-${safeInitialContent ? safeInitialContent.length : 'empty'}-${aiContent ? 'ai-updated' : 'regular'}`}
+        // Key logic remains important 
+        key={`editor-${artifactId}-${safeInitialContent ? 'has-content' : 'empty'}`}
         initialContent={safeInitialContent}
+        // Pass down necessary state and functions
         onChange={(blocks) => {
-          // Reset AI content after user modification
-          if (aiContent) {
-            setAiContent(null);
-          }
-          // Update current content state
+          // When editor changes, update currentContent and call parent onChange
+          setAiContent(null); // User edited, clear AI content override
           setCurrentContent(blocks);
           if (onChange) {
             onChange(blocks);
           }
         }}
+        setAiStatus={setAiStatus} // Pass the setter down
+        currentContent={currentContent} // Pass current blocks down
+        onContentAccessRequest={onContentAccessRequest} // Pass down
         EditorComponent={BlockNoteEditor}
         artifactId={artifactId}
         userId={userId}

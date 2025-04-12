@@ -17,7 +17,6 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
   const { sendMessage, isLoading } = useAI();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [capturedEditorContent, setCapturedEditorContent] = useState<Block[] | undefined>(undefined);
   const [isSearchMode, setIsSearchMode] = useState(false);
 
   // Auto-resize textarea based on content
@@ -121,15 +120,19 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     }
   };
 
-  // Function to request editor content
-  const requestEditorContent = () => {
-    return new Promise<Block[] | undefined>((resolve) => {
+  // Function to request editor content (now expects markdown)
+  const requestEditorMarkdown = () => {
+    return new Promise<string | undefined>((resolve) => {
       // Set up a one-time listener for the response
       const handleContentResponse = (event: CustomEvent) => {
-        if (event.detail && event.detail.content) {
-          setCapturedEditorContent(event.detail.content);
-          resolve(event.detail.content);
+        if (event.detail && typeof event.detail.markdown === 'string') {
+          console.log('ChatInput received editor markdown content.');
+          resolve(event.detail.markdown);
+        } else if (event.detail && event.detail.error) {
+          console.error('ChatInput: Error receiving editor content:', event.detail.error);
+          resolve(undefined); // Resolve with undefined on error
         } else {
+          console.warn('ChatInput: Received unexpected contentResponse format.', event.detail);
           resolve(undefined);
         }
         window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
@@ -141,12 +144,14 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
       // Request the content
       const requestEvent = new CustomEvent('editor:requestContent');
       window.dispatchEvent(requestEvent);
+      console.log('ChatInput dispatched requestContent event.');
       
       // Set a timeout in case we don't get a response
       setTimeout(() => {
         window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
-        resolve(undefined);
-      }, 500);
+        console.warn('ChatInput: Timeout waiting for editor contentResponse.');
+        resolve(undefined); // Resolve with undefined on timeout
+      }, 1000); // Increased timeout slightly
     });
   };
 
@@ -163,13 +168,13 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
       textareaRef.current.style.height = 'auto';
     }
     
-    // Capture current editor content before sending message
-    const editorContent = await requestEditorContent();
+    // Capture current editor content as markdown before sending message
+    const editorMarkdown = await requestEditorMarkdown();
     
-    // Prepare enhanced editor context with current content
+    // Prepare enhanced editor context with markdown string
     const enhancedEditorContext: EditorContext = {
       ...initialEditorContext,
-      editorContent: editorContent
+      markdown: editorMarkdown // Add the markdown string
     };
     
     // Check if this is a search request (starts with /search)
@@ -179,19 +184,20 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     if (selectedImage) {
       const imageDataUrl = imagePreview;
       clearSelectedImage();
+      // Pass the context with markdown
       await sendMessage(userMessage, imageDataUrl, enhancedEditorContext);
     } else if (isSearchRequest) {
       // Extract the search query (everything after /search)
       const searchQuery = userMessage.trim().substring('/search'.length).trim();
       if (searchQuery) {
-        // Call sendMessage with search flag and query
+        // Call sendMessage with search flag, query, and context with markdown
         await sendMessage(userMessage, null, enhancedEditorContext, { isSearch: true, searchQuery });
       } else {
-        // Empty search query, handle as normal message
+        // Empty search query, handle as normal message with context
         await sendMessage(userMessage, null, enhancedEditorContext);
       }
     } else {
-      // Normal message (not search)
+      // Normal message (not search) with context
       await sendMessage(userMessage, null, enhancedEditorContext);
     }
   };
