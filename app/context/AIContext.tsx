@@ -50,7 +50,7 @@ export interface SearchHistoryItem {
 export interface Conversation {
   id: string;
   title: string;
-  messages: Message[];
+  messages?: Message[]; // Make messages optional
   model: AIModelType;
   createdAt: Date;
   updatedAt: Date;
@@ -126,7 +126,7 @@ export function AIProvider({ children }: AIProviderProps) {
       // Process based on model type
       if (conversation.model.startsWith('gpt')) {
         // Prepare messages including system prompt if needed
-        const messages = await Promise.all(conversation.messages.map(async ({ role, content, imageUrl }) => {
+        const messages = conversation.messages ? await Promise.all(conversation.messages.map(async ({ role, content, imageUrl }) => {
           if (imageUrl && role === 'user') {
             // Handle images for vision models - get authenticated URL if needed
             let processedImageUrl = imageUrl;
@@ -152,7 +152,7 @@ export function AIProvider({ children }: AIProviderProps) {
             };
           }
           return { role, content };
-        }));
+        })) : [];
         
         // OpenAI API call
         const response = await openaiClient.chat.completions.create({
@@ -170,11 +170,11 @@ export function AIProvider({ children }: AIProviderProps) {
         responseMetadata = result.metadata;
       } else {
         // Format messages for Gemini
-        const history = conversation.messages
+        const history = (conversation.messages || [])
           .filter(msg => !msg.imageUrl) // Skip messages with images for non-multimodal Gemini models
-          .map(({ role, content }) => ({
-            role: role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: content }],
+          .map((msg: Message) => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }],
           }));
         
         // Ensure history starts with a user message for Gemini API
@@ -283,16 +283,18 @@ export function AIProvider({ children }: AIProviderProps) {
         return;
       }
       
-      // Get user conversations from database
-      const conversations = await ConversationService.getUserConversations(currentUser.id);
+      // Get user conversations (metadata only) from database
+      const conversationsMetadata = await ConversationService.getUserConversations(currentUser.id);
       
-      if (conversations && conversations.length > 0) {
+      if (conversationsMetadata && conversationsMetadata.length > 0) {
+        // Map metadata to Conversation objects (initially without messages)
+        const conversations = conversationsMetadata.map(meta => ({ ...meta, messages: undefined }));
         setConversationHistory(conversations);
         
-        // If we have no active conversation, set the most recent one
+        // If we have no active conversation, set the most recent one (metadata only for now)
         if (!currentConversation) {
-          const mostRecent = conversations[0]; // They're sorted by updated_at desc
-          setCurrentConversation(mostRecent);
+          const mostRecent = conversations[0]; 
+          setCurrentConversation(mostRecent); // Messages will be loaded by useEffect below
           setCurrentModel(mostRecent.model);
         }
       }
@@ -301,14 +303,69 @@ export function AIProvider({ children }: AIProviderProps) {
     } finally {
       setIsLoadingConversations(false);
     }
-  }, [currentConversation]);
+  }, []);
 
   // Load user conversations on first load
   useEffect(() => {
-    if (isInitialized) {
+    // Only need to check if initialized, the load function handles its own loading state
+    if (isInitialized) { 
       loadUserConversations();
     }
-  }, [isInitialized, loadUserConversations]);
+    // Remove isLoadingConversations dependency to prevent loop
+  }, [isInitialized, loadUserConversations]); 
+
+  // --- REVISED useEffect Hook for Lazy Loading Messages ---
+  useEffect(() => {
+    let isMounted = true; // Prevent state update on unmounted component
+
+    const fetchAndSetMessages = async (id: string) => {
+      // Double-check messages haven't been loaded between effect trigger and async execution
+      // Also check isLoading state to prevent potential simultaneous fetches
+      if (isLoading || currentConversation?.id !== id || typeof currentConversation?.messages !== 'undefined') {
+          return;
+      }
+
+      console.log(`Lazy loading messages for conversation: ${id}`);
+      setIsLoading(true);
+      let fetchedMessages: Message[] | null = null; // Use null to indicate fetch hasn't completed successfully
+
+      try {
+        fetchedMessages = await MessageService.getMessagesByConversationId(id);
+      } catch (error) {
+        console.error('Error lazy loading messages:', error);
+        // Set to empty array on error to prevent re-fetching
+        fetchedMessages = [];
+      } finally {
+        if (isMounted) {
+          // Only update state if fetch completed (or errored) and ID still matches
+          if (fetchedMessages !== null) { // Ensures fetchedMessages is Message[] or []
+             const finalMessages: Message[] = fetchedMessages; // Explicitly type as Message[]
+             setCurrentConversation(prevConv => {
+                // Ensure we are still updating the correct conversation
+                if (prevConv && prevConv.id === id) {
+                    // Use the explicitly typed variable
+                    return { ...prevConv, messages: finalMessages }; 
+                }
+                return prevConv; // Otherwise no change
+             });
+          }
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Check if we need to fetch: ID exists and messages is specifically undefined
+    if (currentConversation?.id && typeof currentConversation.messages === 'undefined') {
+      fetchAndSetMessages(currentConversation.id);
+    }
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+    // Dependencies: Trigger when ID changes, or when messages change (from undefined to defined)
+  }, [currentConversation?.id, currentConversation?.messages]); 
+  // --- End REVISED useEffect Hook ---
 
   // Create a new conversation
   const createNewConversation = async (model?: AIModelType) => {
@@ -386,7 +443,7 @@ export function AIProvider({ children }: AIProviderProps) {
       
       // Add user message to local state
       updatedConversation.messages = [
-        ...updatedConversation.messages,
+        ...(updatedConversation.messages || []),
         userMessage
       ];
       
@@ -652,23 +709,53 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       }
       
-      // --- Dispatch editor content --- 
-      // Check if we have editor content (now a markdown string) and intent is EDITOR
-      if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
-        console.log('AIContext: Dispatching editor:setContent event with markdown string.');
-        // Create a custom event to send the EDITOR content MARKDOWN STRING to the editor component
+      // --- MODIFIED: Dispatch editor content or modification --- 
+      // Assume creatorResponse now potentially has a 'type' field
+      // Use type casting to bypass linter errors until backend types are updated
+      const responseType = (creatorResponse as any).type;
+
+      if (responseType === 'modification' && intentAnalysis.destination === 'EDITOR') {
+        // Phase 1: Dispatch modification event
+        console.log('AIContext: Dispatching editor:applyModification event.');
+        const modificationEvent = new CustomEvent('editor:applyModification', {
+          detail: {
+            type: 'modification',
+            action: (creatorResponse as any).action, 
+            targetBlockIds: (creatorResponse as any).targetBlockIds,
+            newMarkdown: (creatorResponse as any).newMarkdown 
+          }
+        });
+        window.dispatchEvent(modificationEvent);
+
+      } else if (responseType === 'full_replace' && intentAnalysis.destination === 'EDITOR') {
+        // Dispatch existing full content replacement event
+        console.log('AIContext: Dispatching editor:setContent event with full markdown string.');
         const editorContentEvent = new CustomEvent('editor:setContent', {
           detail: {
-            content: creatorResponse.editorContent // Pass the markdown string directly
+            content: (creatorResponse as any).content 
           }
         });
         window.dispatchEvent(editorContentEvent);
+
+      } else if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
+        // Fallback for older backend responses or unexpected structures
+        console.warn('AIContext: Received editorContent without type, dispatching as full replace.');
+        const editorContentEvent = new CustomEvent('editor:setContent', {
+          detail: {
+            content: creatorResponse.editorContent
+          }
+        });
+        window.dispatchEvent(editorContentEvent);
+
       } else if (creatorResponse.editorContent) {
-        console.log('AIContext: Editor content received but intent was not EDITOR. Discarding.', {
+         // Editor content received but intent was not EDITOR (existing logic)
+         console.log('AIContext: Editor content received but intent was not EDITOR. Discarding.', {
            intent: intentAnalysis.destination,
            content: creatorResponse.editorContent.substring(0, 100) + '...'
         });
       }
+      // --- END Dispatch Logic ---
+
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -689,11 +776,14 @@ export function AIProvider({ children }: AIProviderProps) {
     }
   };
 
-  // Select a conversation from history
+  // Modify selectConversation to just set the metadata, useEffect will load messages
   const selectConversation = async (id: string) => {
     const conversation = conversationHistory.find(conv => conv.id === id);
-    if (conversation) {
-      setCurrentConversation(conversation);
+    if (conversation && conversation.id !== currentConversation?.id) { // Only switch if different
+      console.log(`Selecting conversation: ${id}. Messages will lazy load.`);
+      // Set the conversation (metadata + potentially undefined messages)
+      // The useEffect hook above will trigger the message loading
+      setCurrentConversation(conversation); 
       setCurrentModel(conversation.model);
     }
   };

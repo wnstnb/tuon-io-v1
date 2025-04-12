@@ -5,33 +5,13 @@ import { useAI } from '../context/AIContext';
 import { MessageSquare, Plus, Loader2 } from 'lucide-react';
 
 export default function ChatHistory() {
-  const { conversationHistory, selectConversation, createNewConversation, currentConversation, loadUserConversations } = useAI();
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
-
-  // Load conversations when component mounts
-  useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        setIsLoadingConversations(true);
-        await loadUserConversations();
-      } catch (error) {
-        console.error('Error loading conversations:', error);
-      } finally {
-        setIsLoadingConversations(false);
-      }
-    };
-
-    loadConversations();
-    // We rely on the AIContext to handle reloading when needed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // When conversations are loaded, update loading state
-  useEffect(() => {
-    if (conversationHistory.length > 0) {
-      setIsLoadingConversations(false);
-    }
-  }, [conversationHistory]);
+  const { 
+    conversationHistory, 
+    selectConversation, 
+    createNewConversation, 
+    currentConversation, 
+    isLoadingConversations // Use loading state from context
+  } = useAI();
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {

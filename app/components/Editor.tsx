@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { type Block } from "@blocknote/core";
+import { type Block, type Selection } from "@blocknote/core";
 import dynamic from 'next/dynamic';
 
 // Dynamically import BlockNote components with SSR disabled
@@ -9,7 +9,7 @@ const BlockNoteEditor = dynamic(
   () => import('@blocknote/react').then((mod) => {
     return {
       default: (props: any) => {
-        const { useCreateBlockNote } = mod;
+        const { useCreateBlockNote, useBlockNoteEditor } = mod;
         const { BlockNoteView } = require('@blocknote/mantine');
         
         // Ref to track programmatic changes
@@ -122,32 +122,113 @@ const BlockNoteEditor = dynamic(
         // Add necessary props to dependency array
         }, [editor, props.onChange, props.setAiStatus]); 
 
-        // Handle editor:requestContent
+        // *** NEW: Handle editor:applyModification ***
+        const handleApplyModification = React.useCallback(async (event: CustomEvent) => {
+          if (!editor) return;
+
+          const detail = event.detail;
+
+          // Phase 1: Handle single/contiguous modification
+          if (detail.type === 'modification' && detail.action === 'replace' && detail.targetBlockIds && detail.newMarkdown) {
+            const { targetBlockIds, newMarkdown } = detail;
+            console.log(`Editor: Applying modification to blocks: ${targetBlockIds.join(', ')}`);
+            if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Applying changes...' });
+
+            try {
+              const newBlocks = await editor.tryParseMarkdownToBlocks(newMarkdown);
+
+              // Find target blocks in the current document
+              const targetBlocks: Block[] = targetBlockIds
+                .map((id: string) => editor.document.find((block: Block) => block.id === id))
+                .filter((block: Block | undefined): block is Block => block !== undefined);
+
+              if (targetBlocks.length !== targetBlockIds.length) {
+                console.error("Editor: Could not find all target blocks for replacement.", { targetBlockIds, foundBlocks: targetBlocks.map(b => b.id) });
+                throw new Error("Target block(s) not found in current document.");
+              }
+              
+              // TODO: Optionally add contiguity check here for Phase 1 if strictness needed
+
+              editor.replaceBlocks(targetBlocks, newBlocks);
+
+              console.log('Editor: Modification applied successfully.');
+              if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 500);
+
+              // Trigger onChange after modification if needed (consider debouncing/throttling)
+              if (props.onChange) {
+                 // Give editor state a moment to settle before reporting change
+                 setTimeout(() => {
+                    if (editor) { // Check editor still exists
+                         props.onChange(editor.document);
+                     }
+                 }, 100);
+              }
+
+            } catch (error) {
+              console.error('Editor: Error applying modification:', error);
+              if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error applying changes' });
+            }
+          } else {
+            // Handle Phase 2 multi_modification or other types in the future
+            console.warn('Editor: Received modification event with unhandled structure for Phase 1.', detail);
+          }
+        }, [editor, props.onChange, props.setAiStatus]); // Dependencies for the handler
+
+        // Add the new listener for modifications
+        React.useEffect(() => {
+          window.addEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
+          return () => window.removeEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
+        }, [editor, handleApplyModification]); // Add handler to dependencies
+
+        // Handle editor:requestContent - MODIFIED to include selection IDs
         React.useEffect(() => {
           const handleContentRequest = async () => {
+            if (!editor) return; // Ensure editor exists
+
             let markdownString: string | null = null;
             let errorMsg: string | null = null;
-            // Use props.currentContent if available
+            let selectedBlockIds: string[] = [];
+
             const currentBlocks = props.currentContent || editor.document;
+
             try {
+              // Get markdown
               markdownString = await editor.blocksToMarkdownLossy(currentBlocks);
-              // Use props.onContentAccessRequest if available
+
+              // Get selected block IDs
+              // Cast to 'any' to bypass Selection generic type error temporarily
+              const currentSelection: any = editor.getSelection(); 
+              if (currentSelection && currentSelection.blocks) {
+                  // If blocks are selected (highlighted)
+                  selectedBlockIds = currentSelection.blocks.map((block: Block) => block.id);
+              // Check if selection is collapsed (cursor) and anchor exists
+              } else if (currentSelection && !currentSelection.blocks && currentSelection.anchor) { 
+                  const anchorBlockId = currentSelection.anchor.blockId;
+                  // If it's just a cursor (collapsed selection), find the block containing the cursor
+                  const anchorBlock = editor.document.find((block: Block) => block.id === anchorBlockId);
+                  if (anchorBlock) {
+                      selectedBlockIds = [anchorBlock.id];
+                  }
+              }
+              
+              // Use props.onContentAccessRequest if available (existing logic)
               if (props.onContentAccessRequest) {
                 props.onContentAccessRequest(currentBlocks);
               }
             } catch (error) {
-              console.error('Editor (Inner): Error converting blocks to markdown:', error);
-              errorMsg = 'Failed to get markdown content';
+              console.error('Editor (Inner): Error processing content request:', error);
+              errorMsg = 'Failed to get editor content or selection';
             }
+
+            // Include selectedBlockIds in the response detail
             const responseEvent = new CustomEvent('editor:contentResponse', {
-              detail: { markdown: markdownString, error: errorMsg }
+              detail: { markdown: markdownString, selectedBlockIds, error: errorMsg }
             });
             window.dispatchEvent(responseEvent);
           };
           window.addEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
           return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
-        // Add necessary props to dependency array
-        }, [editor, props.onContentAccessRequest, props.currentContent]); 
+        }, [editor, props.onContentAccessRequest, props.currentContent]); // Dependencies for the handler
 
         // Effect to update editor content when initialContent prop changes
         React.useEffect(() => {

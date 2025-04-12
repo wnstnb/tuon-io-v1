@@ -35,7 +35,16 @@ export default function ChatInterface() {
       </div>
       
       <div className="chat-messages">
-        {!currentConversation || currentConversation.messages.length === 0 ? (
+        {/* Display loading indicator specifically when messages are being loaded */}
+        {isLoading && (!currentConversation || !currentConversation.messages) && (
+          <div className="loading-indicator initial-load">
+            <Loader2 size={24} className="spinner" />
+            <p>Loading messages...</p>
+          </div>
+        )}
+
+        {/* Display empty state only if not loading and no messages exist */}
+        {!isLoading && (!currentConversation || !currentConversation.messages || currentConversation.messages.length === 0) ? (
           <div className="empty-chat">
             <h3>Start a new conversation</h3>
             <p>Select a model and send a message to begin</p>
@@ -44,17 +53,21 @@ export default function ChatInterface() {
             </p>
           </div>
         ) : (
-          <>
-            {currentConversation.messages.map((message, index) => (
-              <ChatMessage key={index} message={message} />
-            ))}
-            {isLoading && (
-              <div className="loading-indicator">
-                <Loader2 size={24} className="spinner" />
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </>
+          /* Render messages only if they exist */
+          currentConversation && currentConversation.messages && (
+            <>
+              {currentConversation.messages.map((message, index) => (
+                <ChatMessage key={index} message={message} />
+              ))}
+              {/* Show spinner for subsequent loading (e.g., waiting for AI response) */}
+              {isLoading && currentConversation.messages.length > 0 && (
+                <div className="loading-indicator">
+                  <Loader2 size={24} className="spinner" />
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </>
+          )
         )}
       </div>
       

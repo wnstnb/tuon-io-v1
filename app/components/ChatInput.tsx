@@ -120,38 +120,36 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     }
   };
 
-  // Function to request editor content (now expects markdown)
-  const requestEditorMarkdown = () => {
-    return new Promise<string | undefined>((resolve) => {
+  // Function to request editor content (now expects markdown and selected IDs)
+  const requestEditorContext = () => {
+    return new Promise<{ markdown?: string; selectedBlockIds?: string[] }>((resolve) => {
       // Set up a one-time listener for the response
       const handleContentResponse = (event: CustomEvent) => {
-        if (event.detail && typeof event.detail.markdown === 'string') {
-          console.log('ChatInput received editor markdown content.');
-          resolve(event.detail.markdown);
-        } else if (event.detail && event.detail.error) {
-          console.error('ChatInput: Error receiving editor content:', event.detail.error);
-          resolve(undefined); // Resolve with undefined on error
+        const { markdown, selectedBlockIds, error } = event.detail;
+        if (error) {
+          console.error('ChatInput: Error receiving editor context:', error);
+          resolve({}); // Resolve with empty object on error
         } else {
-          console.warn('ChatInput: Received unexpected contentResponse format.', event.detail);
-          resolve(undefined);
+          console.log('ChatInput received editor context:', { markdown: markdown?.substring(0, 50) + '...', selectedBlockIds });
+          resolve({ markdown, selectedBlockIds });
         }
         window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
       };
-      
+
       // Listen for the response
       window.addEventListener('editor:contentResponse', handleContentResponse as EventListener);
-      
+
       // Request the content
       const requestEvent = new CustomEvent('editor:requestContent');
       window.dispatchEvent(requestEvent);
       console.log('ChatInput dispatched requestContent event.');
-      
+
       // Set a timeout in case we don't get a response
       setTimeout(() => {
         window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
         console.warn('ChatInput: Timeout waiting for editor contentResponse.');
-        resolve(undefined); // Resolve with undefined on timeout
-      }, 1000); // Increased timeout slightly
+        resolve({}); // Resolve with empty object on timeout
+      }, 1500); // Slightly increased timeout
     });
   };
 
@@ -168,13 +166,14 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
       textareaRef.current.style.height = 'auto';
     }
     
-    // Capture current editor content as markdown before sending message
-    const editorMarkdown = await requestEditorMarkdown();
+    // Capture current editor context (markdown + selected IDs)
+    const { markdown: editorMarkdown, selectedBlockIds } = await requestEditorContext();
     
-    // Prepare enhanced editor context with markdown string
+    // Prepare enhanced editor context
     const enhancedEditorContext: EditorContext = {
       ...initialEditorContext,
-      markdown: editorMarkdown // Add the markdown string
+      markdown: editorMarkdown,
+      selectedBlockIds: selectedBlockIds, // Add selected block IDs
     };
     
     // Check if this is a search request (starts with /search)

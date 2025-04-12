@@ -14,38 +14,18 @@ interface SearchResult {
 }
 
 export default function GlobalSearch() {
-  const { conversationHistory, selectConversation, loadUserConversations } = useAI();
+  const { 
+    conversationHistory, 
+    selectConversation, 
+    isLoadingConversations
+  } = useAI();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [activeTab, setActiveTab] = useState<'search' | 'history'>('search');
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  
-  // Load conversations when component mounts
-  useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        setIsLoadingConversations(true);
-        await loadUserConversations();
-      } catch (error) {
-        console.error('Error loading conversations:', error);
-      } finally {
-        setIsLoadingConversations(false);
-      }
-    };
-
-    loadConversations();
-  }, [loadUserConversations]);
-
-  // When conversations are loaded, update loading state
-  useEffect(() => {
-    if (conversationHistory.length > 0) {
-      setIsLoadingConversations(false);
-    }
-  }, [conversationHistory]);
   
   // Handle clicks outside the search component to close results
   useEffect(() => {
@@ -114,7 +94,7 @@ export default function GlobalSearch() {
           id: conversation.id,
           title: conversation.title,
           type: 'conversation' as const,
-          preview: conversation.messages.length > 0 
+          preview: conversation.messages && conversation.messages.length > 0 
             ? conversation.messages[0].content.substring(0, 60) + '...' 
             : 'Empty conversation'
         }));

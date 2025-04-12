@@ -5,37 +5,15 @@ import { History, Search, X, Loader2 } from 'lucide-react';
 import { useAI } from '../context/AIContext';
 
 export default function HistoryDropdown() {
-  const { conversationHistory, selectConversation, loadUserConversations } = useAI();
+  const { 
+    conversationHistory, 
+    selectConversation, 
+    isLoadingConversations // Use loading state from context
+  } = useAI();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Load conversations when component mounts
-  useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        setIsLoadingConversations(true);
-        await loadUserConversations();
-      } catch (error) {
-        console.error('Error loading conversations:', error);
-      } finally {
-        setIsLoadingConversations(false);
-      }
-    };
-
-    loadConversations();
-    // We rely on the AIContext to handle reloading when needed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // When conversations are loaded, update loading state
-  useEffect(() => {
-    if (conversationHistory.length > 0) {
-      setIsLoadingConversations(false);
-    }
-  }, [conversationHistory]);
 
   // Handle clicks outside the dropdown to close it
   useEffect(() => {
