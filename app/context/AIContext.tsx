@@ -7,7 +7,7 @@ import { Block } from "@blocknote/core";
 import { MessageService } from '../lib/services/MessageService';
 import { ConversationService } from '../lib/services/ConversationService';
 import { UserService } from '../lib/services/UserService';
-import { CreatorAgentService } from '../lib/services/CreatorAgentService';
+import { CreatorAgentService, IntentAnalysisResult } from '../lib/services/CreatorAgentService';
 import { useSupabase } from '../context/SupabaseContext';
 
 // Define supported AI models
@@ -456,8 +456,16 @@ export function AIProvider({ children }: AIProviderProps) {
         setSearchHistory(prev => [searchItem, ...prev]);
       }
       
-      // Determine intent - this will tell us whether to send to editor or conversation
-      let intentAnalysis;
+      // Prepare context for AI history (history *without* the current user message)
+      // Use slice(0, -1) on the updated message list
+      const conversationContext = updatedConversation.messages.slice(0, -1).map(msg => ({
+        role: msg.role,
+        content: msg.content,
+        imageUrl: msg.imageUrl // Include path if needed by CreatorAgentService history processing
+      }));
+
+      // --- Intent Analysis (Uses editorContext, not history) ---
+      let intentAnalysis: IntentAnalysisResult; // Define type explicitly
       try {
         const { IntentAgentService } = await import('../lib/services/IntentAgentService');
         intentAnalysis = await IntentAgentService.analyzeIntent(content, editorContext);
@@ -483,37 +491,30 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       } catch (error) {
         console.error('Error analyzing intent:', error);
-        // Explicitly type the fallback object to match IntentAnalysisResult
+        // Ensure fallback matches the defined type
         intentAnalysis = {
-          destination: 'CONVERSATION' as const, // Use 'as const' or cast to the union type
-          confidence: 1.0,
-          reasoning: 'Error in intent analysis, defaulting to conversation',
-          // Ensure other required fields (if any) from IntentAnalysisResult have default values
-          // needsWebSearch: false, 
-          // searchQuery: undefined
+           destination: 'CONVERSATION' as const, // Use 'as const' or cast
+           confidence: 1.0,
+           reasoning: 'Intent analysis failed, defaulting to conversation',
+           // Initialize other potential fields from IntentAnalysisResult if they exist
+           needsWebSearch: false, 
+           searchQuery: undefined
         };
       }
       
-      // Generate AI response using creator agent
-      try {
-        // Get recent conversation history for context (limit to 10 messages)
-        const conversationContext = updatedConversation.messages
-          .slice(-10)
-          .map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }));
-          
-        // If we have search results, add them to conversation context
-        if (searchResults.length > 0) {
+      // --- Search Results Handling --- 
+      // If search results exist, add them to conversationContext *before* calling CreatorAgentService
+      let searchResultsAddedToContext = false; // Flag to track if context was modified
+      if (searchResults.length > 0) {
           const { SearchService } = await import('../lib/services/SearchService');
           const formattedResults = SearchService.formatResults(searchResults);
-          
-          // Add search results as a system message in conversation context
-          conversationContext.push({
-            role: 'system',
-            content: `Search results for "${searchOptions?.searchQuery || intentAnalysis?.searchQuery}":\n\n${formattedResults}`
+          // NOTE: Directly pushing modifies the array used by the CreatorAgentService call below
+          conversationContext.push({ 
+              role: 'system',
+              content: `Search results for "${searchOptions?.searchQuery || intentAnalysis?.searchQuery}":\n\n${formattedResults}`,
+              imageUrl: undefined // Ensure consistent object structure
           });
+          searchResultsAddedToContext = true;
           
           // If this was an auto-detected search (not explicit /search command),
           // add a message to inform the user that a search was performed
@@ -547,152 +548,126 @@ export function AIProvider({ children }: AIProviderProps) {
             setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
             updateConversationInHistory({...updatedConversation});
           }
-        }
+      }
           
-        // Process with creator agent
-        console.log('AIContext: Calling CreatorAgentService.processRequest');
-        console.log('AIContext: editorContext received:', editorContext);
-        
-        const creatorResponse = await CreatorAgentService.processRequest(
-          content,
-          intentAnalysis,
-          conversationContext,
-          editorContext?.markdown,
-          updatedConversation.model
-        );
-        
-        console.log('AIContext: Received response from CreatorAgentService:', creatorResponse);
-        
-        // Prepare AI response message object
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: creatorResponse.chatContent,
-          model: updatedConversation.model // Use the current model from state
-        };
-        
-        // Add AI response to conversation (local state)
-        updatedConversation.messages.push(assistantMessage);
-        
-        // --- Save Assistant Message to DB ---
-        if (currentUser) {
-          try {
-            await MessageService.createMessage(
-              currentConversation.id,
-              assistantMessage,
-              currentUser.id
-            );
-            // Update conversation timestamp
-            await ConversationService.updateConversationTimestamp(currentConversation.id);
-          } catch (error) {
-            console.error('Error saving assistant message to database:', error);
-          }
+      // Process with creator agent
+      console.log('AIContext: Calling CreatorAgentService.processRequest');
+      console.log('AIContext: editorContext received:', editorContext);
+
+      // *** DIAGNOSTIC LOG: Check context being passed ***
+      console.log(`AIContext: Preparing ${conversationContext.length} history messages for CreatorAgentService (Search results added: ${searchResultsAddedToContext}). Last 3:`, JSON.stringify(conversationContext.slice(-3).map(m => ({ role: m.role, hasImage: !!m.imageUrl, content: m.content.substring(0, 50) + '...' })), null, 2)); 
+
+      // Get the imageUrl from the userMessage we potentially updated after upload
+      const finalUserMessageImageUrl = updatedConversation.messages[updatedConversation.messages.length - 1]?.imageUrl;
+
+      const creatorResponse = await CreatorAgentService.processRequest(
+        content,
+        intentAnalysis, // Now guaranteed to be of type IntentAnalysisResult
+        conversationContext,
+        finalUserMessageImageUrl,
+        editorContext?.markdown,
+        updatedConversation.model
+      );
+      
+      console.log('AIContext: Received response from CreatorAgentService:', creatorResponse);
+      
+      // Prepare AI response message object
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: creatorResponse.chatContent,
+        model: updatedConversation.model // Use the current model from state
+      };
+      
+      // Add AI response to conversation (local state)
+      updatedConversation.messages.push(assistantMessage);
+      
+      // --- Save Assistant Message to DB ---
+      if (currentUser) {
+        try {
+          await MessageService.createMessage(
+            currentConversation.id,
+            assistantMessage,
+            currentUser.id
+          );
+          // Update conversation timestamp
+          await ConversationService.updateConversationTimestamp(currentConversation.id);
+        } catch (error) {
+          console.error('Error saving assistant message to database:', error);
         }
-        // ----------------------------------
-        
-        // Update conversation in state again (local UI update)
-        setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
-        updateConversationInHistory({...updatedConversation});
-        
-        // Check if this is the first message exchange and infer a title if it is
-        if (updatedConversation.messages.length === 2 && updatedConversation.title === 'New Conversation') {
-          try {
-            // Combine user message and AI response for better title inference
-            const userMessage = updatedConversation.messages[0].content;
-            const aiResponse = updatedConversation.messages[1].content;
-            const combinedContent = `User: ${userMessage}\nAgent: ${aiResponse}`;
-            
-            // Call title inference API
-            const response = await fetch('/api/infer-title', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                content: combinedContent,
-                contextType: 'conversation',
-                contextId: updatedConversation.id,
-              }),
-            });
-            
-            if (response.ok) {
-              const result = await response.json();
-              if (result.success && result.title) {
-                // Update conversation title in state
-                const titleUpdatedConversation = {
-                  ...updatedConversation,
-                  title: result.title
-                };
-                setCurrentConversation(titleUpdatedConversation);
-                updateConversationInHistory(titleUpdatedConversation);
-                
-                // --- Save Updated Title to DB ---
-                if (currentUser) { // Check if user context is available
-                  try {
-                    await ConversationService.updateConversationTitle(
-                      updatedConversation.id, // Use the correct conversation ID
-                      result.title
-                    );
-                  } catch(error) {
-                    console.error('Error updating conversation title in database:', error);
-                  }
+      }
+      // ----------------------------------
+      
+      // Update conversation in state again (local UI update)
+      setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
+      updateConversationInHistory({...updatedConversation});
+      
+      // Check if this is the first message exchange and infer a title if it is
+      if (updatedConversation.messages.length === 2 && updatedConversation.title === 'New Conversation') {
+        try {
+          // Combine user message and AI response for better title inference
+          const userMessage = updatedConversation.messages[0].content;
+          const aiResponse = updatedConversation.messages[1].content;
+          const combinedContent = `User: ${userMessage}\nAgent: ${aiResponse}`;
+          
+          // Call title inference API
+          const response = await fetch('/api/infer-title', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              content: combinedContent,
+              contextType: 'conversation',
+              contextId: updatedConversation.id,
+            }),
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.title) {
+              // Update conversation title in state
+              const titleUpdatedConversation = {
+                ...updatedConversation,
+                title: result.title
+              };
+              setCurrentConversation(titleUpdatedConversation);
+              updateConversationInHistory(titleUpdatedConversation);
+              
+              // --- Save Updated Title to DB ---
+              if (currentUser) { // Check if user context is available
+                try {
+                  await ConversationService.updateConversationTitle(
+                    updatedConversation.id, // Use the correct conversation ID
+                    result.title
+                  );
+                } catch(error) {
+                  console.error('Error updating conversation title in database:', error);
                 }
-                // --------------------------------
               }
+              // --------------------------------
             }
-          } catch (error) {
-            console.error('Error inferring conversation title:', error);
-            // Continue without title inference on error
           }
+        } catch (error) {
+          console.error('Error inferring conversation title:', error);
+          // Continue without title inference on error
         }
-        
-        // --- Dispatch editor content --- 
-        // Check if we have editor content (now a markdown string) and intent is EDITOR
-        if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
-          console.log('AIContext: Dispatching editor:setContent event with markdown string.');
-          // Create a custom event to send the EDITOR content MARKDOWN STRING to the editor component
-          const editorContentEvent = new CustomEvent('editor:setContent', {
-            detail: {
-              content: creatorResponse.editorContent // Pass the markdown string directly
-            }
-          });
-          window.dispatchEvent(editorContentEvent);
-        } else if (creatorResponse.editorContent) {
-          console.log('AIContext: Editor content received but intent was not EDITOR. Discarding.', {
-             intent: intentAnalysis.destination,
-             content: creatorResponse.editorContent.substring(0, 100) + '...'
-          });
-        }
-      } catch (error) {
-        console.error('Error generating AI response:', error);
-        
-        // Prepare error message object
-        const assistantErrorMessage: Message = {
-          role: 'assistant',
-          content: 'I apologize, but I encountered an error while processing your request. Please try again.',
-          model: updatedConversation.model // Use the current model from state
-        };
-        
-        // Add error message to conversation (local state)
-        updatedConversation.messages.push(assistantErrorMessage);
-        
-        // --- Save Assistant Error Message to DB (Optional) ---
-        if (currentUser) {
-          try {
-            await MessageService.createMessage(
-              currentConversation.id,
-              assistantErrorMessage,
-              currentUser.id
-            );
-            // Update conversation timestamp
-            await ConversationService.updateConversationTimestamp(currentConversation.id);
-          } catch (error) {
-            console.error('Error saving assistant error message to database:', error);
+      }
+      
+      // --- Dispatch editor content --- 
+      // Check if we have editor content (now a markdown string) and intent is EDITOR
+      if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
+        console.log('AIContext: Dispatching editor:setContent event with markdown string.');
+        // Create a custom event to send the EDITOR content MARKDOWN STRING to the editor component
+        const editorContentEvent = new CustomEvent('editor:setContent', {
+          detail: {
+            content: creatorResponse.editorContent // Pass the markdown string directly
           }
-        }
-        // -----------------------------------------------------
-        
-        // Update conversation in state (local UI update)
-        setCurrentConversation({...updatedConversation}); // Spread to ensure re-render
-        updateConversationInHistory({...updatedConversation});
+        });
+        window.dispatchEvent(editorContentEvent);
+      } else if (creatorResponse.editorContent) {
+        console.log('AIContext: Editor content received but intent was not EDITOR. Discarding.', {
+           intent: intentAnalysis.destination,
+           content: creatorResponse.editorContent.substring(0, 100) + '...'
+        });
       }
     } catch (error) {
       console.error('Error sending message:', error);
