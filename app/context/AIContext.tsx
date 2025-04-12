@@ -483,10 +483,14 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       } catch (error) {
         console.error('Error analyzing intent:', error);
+        // Explicitly type the fallback object to match IntentAnalysisResult
         intentAnalysis = {
-          destination: 'CONVERSATION',
+          destination: 'CONVERSATION' as const, // Use 'as const' or cast to the union type
           confidence: 1.0,
-          reasoning: 'Error in intent analysis, defaulting to conversation'
+          reasoning: 'Error in intent analysis, defaulting to conversation',
+          // Ensure other required fields (if any) from IntentAnalysisResult have default values
+          // needsWebSearch: false, 
+          // searchQuery: undefined
         };
       }
       
@@ -553,7 +557,8 @@ export function AIProvider({ children }: AIProviderProps) {
           content,
           intentAnalysis,
           conversationContext,
-          editorContext?.markdown
+          editorContext?.markdown,
+          updatedConversation.model
         );
         
         console.log('AIContext: Received response from CreatorAgentService:', creatorResponse);
@@ -562,7 +567,7 @@ export function AIProvider({ children }: AIProviderProps) {
         const assistantMessage: Message = {
           role: 'assistant',
           content: creatorResponse.chatContent,
-          model: currentModel // Use the current model from state
+          model: updatedConversation.model // Use the current model from state
         };
         
         // Add AI response to conversation (local state)
@@ -663,7 +668,7 @@ export function AIProvider({ children }: AIProviderProps) {
         const assistantErrorMessage: Message = {
           role: 'assistant',
           content: 'I apologize, but I encountered an error while processing your request. Please try again.',
-          model: currentModel // Use the current model from state
+          model: updatedConversation.model // Use the current model from state
         };
         
         // Add error message to conversation (local state)

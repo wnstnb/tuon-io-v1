@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { type Block } from "@blocknote/core";
 import dynamic from 'next/dynamic';
 
@@ -11,6 +11,9 @@ const BlockNoteEditor = dynamic(
       default: (props: any) => {
         const { useCreateBlockNote } = mod;
         const { BlockNoteView } = require('@blocknote/mantine');
+        
+        // Ref to track programmatic changes
+        const isProgrammaticChange = React.useRef(false);
         
         // Create editor with image upload support
         const editor = useCreateBlockNote({
@@ -146,21 +149,35 @@ const BlockNoteEditor = dynamic(
         // Add necessary props to dependency array
         }, [editor, props.onContentAccessRequest, props.currentContent]); 
 
+        // Effect to update editor content when initialContent prop changes
+        React.useEffect(() => {
+          // Check if initialContent is valid and different from current document
+          // Basic check to avoid unnecessary updates and potential loops
+          if (props.initialContent && editor.document !== props.initialContent) {
+            // console.log('Editor (Inner): Detected initialContent change, replacing blocks.');
+            isProgrammaticChange.current = true; // Set flag before programmatic change
+            editor.replaceBlocks(editor.document, props.initialContent);
+          }
+        // Depend on initialContent and the editor instance
+        }, [props.initialContent, editor]);
+
         // Regular onChange handler (already uses props correctly)
         React.useEffect(() => {
           if (!props.onChange) return;
-          let debounceTimeout: NodeJS.Timeout | null = null;
-          const debounceDelay = 3000;
-          const debouncedOnChange = () => {
-            const blocks = editor.document;
-            props.onChange(blocks);
-          };
+
           const handleChange = () => {
-            if (debounceTimeout) clearTimeout(debounceTimeout);
-            debounceTimeout = setTimeout(debouncedOnChange, debounceDelay);
+            // Keep the check for programmatic changes
+            if (isProgrammaticChange.current) {
+              isProgrammaticChange.current = false;
+              return;
+            }
+
+            // Call props.onChange directly
+            const blocks = editor.document;
+            props.onChange(blocks); // Report changes immediately
           };
+
           editor.onChange(handleChange);
-          return () => { if (debounceTimeout) clearTimeout(debounceTimeout); };
         }, [editor, props.onChange]);
 
         return (
@@ -190,7 +207,8 @@ interface EditorProps {
   onContentAccessRequest?: (content: Block[]) => void;
 }
 
-export default function Editor({ initialContent, onChange, artifactId, userId, onContentAccessRequest }: EditorProps) {
+// Rename the original function component
+const EditorComponent = ({ initialContent, onChange, artifactId, userId, onContentAccessRequest }: EditorProps) => {
   // State to track content updates from AI (might be needed for keying/remounting)
   const [aiContent, setAiContent] = React.useState<Block[] | null>(null);
   // State to track current editor content (needed for onContentAccessRequest)
@@ -208,9 +226,9 @@ export default function Editor({ initialContent, onChange, artifactId, userId, o
   }, [initialContent]);
 
   // Debugging log
-  React.useEffect(() => {
+  /* React.useEffect(() => {
     console.log(`Editor (Outer) received new initialContent for artifact: ${artifactId}`);
-  }, [initialContent, artifactId]);
+  }, [initialContent, artifactId]); */
   
   // Simplified initial content logic for passing down
   const safeInitialContent = React.useMemo(() => {
@@ -256,4 +274,7 @@ export default function Editor({ initialContent, onChange, artifactId, userId, o
       />
     </div>
   );
-} 
+};
+
+// Export the memoized component as the default
+export default memo(EditorComponent); 
