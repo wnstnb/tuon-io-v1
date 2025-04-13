@@ -151,9 +151,15 @@ function EditorPageContent() {
   // Helper function to extract text content for title inference
   const extractTextForInference = (content: Block[]): string => {
     return content.slice(0, 5).map((block: any) => {
-      if (block.content) {
+      // Check if content exists AND is an array before mapping
+      if (block.content && Array.isArray(block.content)) { 
         return block.content.map((item: any) => item.text || '').join(' ');
       }
+      // Also consider if the block itself has direct text content (e.g., heading)
+      if (typeof block.content === 'string') {
+        return block.content;
+      } 
+      // Otherwise, return empty string for this block
       return '';
     }).join('\n').trim();
   };

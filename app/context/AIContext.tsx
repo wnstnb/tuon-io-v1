@@ -734,11 +734,25 @@ export function AIProvider({ children }: AIProviderProps) {
       // Use type casting to bypass linter errors until backend types are updated
       const responseType = (creatorResponse as any).type;
 
+      // --- DIAGNOSTIC LOGGING ---
+      console.log(`[AIContext Debug] Received responseType: ${responseType}, Destination: ${intentAnalysis.destination}`);
+      if ((creatorResponse as any).newMarkdown) {
+        console.log('[AIContext Debug] Raw newMarkdown from AI:', JSON.stringify((creatorResponse as any).newMarkdown));
+      }
+      // --- END DIAGNOSTIC LOGGING ---
+
       if (responseType === 'modification' && intentAnalysis.destination === 'EDITOR') {
         // Phase 1: Dispatch modification event
-        console.log('AIContext: Dispatching editor:applyModification event.');
+        console.log('[AIContext] Dispatching editor:applyModification event.'); // Added prefix for clarity
         // --- MODIFIED: Strip potential code block ---
-        const cleanedMarkdown = stripMarkdownCodeBlock((creatorResponse as any).newMarkdown);
+        const rawMarkdown = (creatorResponse as any).newMarkdown;
+        const cleanedMarkdown = stripMarkdownCodeBlock(rawMarkdown);
+        // --- DIAGNOSTIC LOGGING ---
+        console.log('[AIContext Debug] Cleaned newMarkdown:', JSON.stringify(cleanedMarkdown));
+        if (rawMarkdown === cleanedMarkdown) {
+          console.warn('[AIContext Debug] stripMarkdownCodeBlock did not change the content.');
+        }
+        // --- END DIAGNOSTIC LOGGING ---
         // --- END MODIFICATION ---
         const modificationEvent = new CustomEvent('editor:applyModification', {
           detail: {
@@ -752,7 +766,7 @@ export function AIProvider({ children }: AIProviderProps) {
 
       } else if (responseType === 'full_replace' && intentAnalysis.destination === 'EDITOR') {
         // Dispatch existing full content replacement event
-        console.log('AIContext: Dispatching editor:setContent event with full markdown string.');
+        console.log('[AIContext] Dispatching editor:setContent event with full markdown string.'); // Added prefix
         const editorContentEvent = new CustomEvent('editor:setContent', {
           detail: {
             content: (creatorResponse as any).content 
@@ -762,10 +776,22 @@ export function AIProvider({ children }: AIProviderProps) {
 
       } else if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
         // Fallback for older backend responses or unexpected structures
-        console.warn('AIContext: Received editorContent without type, dispatching as full replace.');
+        console.warn('[AIContext] Received editorContent without type, dispatching as full replace.'); // Added prefix
+        
+        // --- REVISED: Always attempt strip if destination is EDITOR and type is missing ---
+        let finalContent = creatorResponse.editorContent;
+        console.log('[AIContext Debug] Intent destination is EDITOR and type is missing, attempting to strip code block from editorContent as fallback.');
+        finalContent = stripMarkdownCodeBlock(creatorResponse.editorContent);
+        if (finalContent !== creatorResponse.editorContent) {
+           console.log('[AIContext Debug] Fallback stripping successful.');
+        } else {
+           console.warn('[AIContext Debug] Fallback stripping did not change content.');
+        }
+        // --- END REVISED Check ---
+        
         const editorContentEvent = new CustomEvent('editor:setContent', {
           detail: {
-            content: creatorResponse.editorContent
+            content: finalContent // Use potentially cleaned content
           }
         });
         window.dispatchEvent(editorContentEvent);
