@@ -5,6 +5,7 @@ import { Plus, X, FilePlus, Copy, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ArtifactService } from '../lib/services/ArtifactService';
 import { useSupabase } from '../context/SupabaseContext';
+import { useAI } from '../context/AIContext';
 
 interface EditorFABProps {
   artifactId?: string;
@@ -16,6 +17,7 @@ export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABPro
   const [isExpanded, setIsExpanded] = useState(false);
   const router = useRouter();
   const { user: supabaseUser } = useSupabase();
+  const { createNewConversation } = useAI();
   // Use either passed userId or get it from context
   const effectiveUserId = userId || supabaseUser?.id;
 
@@ -30,13 +32,16 @@ export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABPro
     }
 
     try {
-      const newArtifactId = await ArtifactService.createArtifact(effectiveUserId, 'Untitled Artifact');
-      if (newArtifactId) {
-        router.push(`/editor?artifactId=${newArtifactId}`);
-      }
+      // Use createArtifactWithId to generate ID first
+      const newArtifactId = crypto.randomUUID(); 
+      console.log(`EditorFAB: Generated new artifact ID: ${newArtifactId}`);
+
+      // Call AIContext to create linked conversation AND artifact
+      await createNewConversation(undefined, newArtifactId);
     } catch (error) {
-      console.error('Error creating new artifact:', error);
-      alert('Failed to create new artifact');
+      console.error('Error initiating new artifact/conversation creation:', error);
+      // Error handling might be partially done within createNewConversation now
+      // alert('Failed to create new artifact');
     } finally {
       setIsExpanded(false);
     }

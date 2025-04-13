@@ -1,13 +1,19 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Save } from 'lucide-react';
 
 interface TitleBarProps {
   initialTitle?: string;
   onTitleChange?: (title: string) => void;
+  saveStatus: 'idle' | 'syncing' | 'synced' | 'pending' | 'error';
+  statusMessage: string;
+  isPersisted: boolean;
+  lastSynced: string | null;
+  onForceSync: () => void;
 }
 
-export default function TitleBar({ initialTitle = 'Untitled Artifact', onTitleChange }: TitleBarProps) {
+export default function TitleBar({ initialTitle = 'Untitled Artifact', onTitleChange, saveStatus, statusMessage, isPersisted, lastSynced, onForceSync }: TitleBarProps) {
   const [title, setTitle] = useState(initialTitle);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -55,6 +61,20 @@ export default function TitleBar({ initialTitle = 'Untitled Artifact', onTitleCh
           {title}
         </h2>
       )}
+      <div className="save-status-container">
+        <button 
+          onClick={onForceSync} 
+          className={`manual-save-button ${isPersisted ? '' : 'disabled'}`}
+          disabled={!isPersisted}
+          title="Save changes"
+          aria-label="Save changes"
+        >
+          <Save size={16} />
+        </button>
+        <span className={`save-status-indicator ${saveStatus}`} title={statusMessage}>
+          {statusMessage}
+        </span>
+      </div>
     </div>
   );
 } 

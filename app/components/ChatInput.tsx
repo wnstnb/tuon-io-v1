@@ -164,6 +164,7 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    console.log('ChatInput: handleSubmit called, event.preventDefault() executed.');
     
     if ((!message.trim() && !selectedImage) || isLoading) return;
     
@@ -188,6 +189,9 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     // Check if this is a search request (starts with /search)
     const isSearchRequest = userMessage.trim().startsWith('/search');
     
+    // *** Log before calling sendMessage ***
+    console.log('ChatInput: Preparing to call sendMessage.', { hasImage: !!selectedImage, isSearch: isSearchRequest, message: userMessage });
+
     // Handle message with image
     if (selectedImage) {
       const imageDataUrl = imagePreview;

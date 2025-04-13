@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { type Block, type Selection } from "@blocknote/core";
+import { type Block, type Selection, type BlockNoteEditor as BlockNoteEditorType } from "@blocknote/core";
 import dynamic from 'next/dynamic';
 import { isEqual } from 'lodash-es'; // Import isEqual
 
@@ -92,14 +92,26 @@ const BlockNoteEditor = dynamic(
           }
         });
         
+        // --- NEW: Call onEditorReady when editor is created --- //
+        React.useEffect(() => {
+          if (editor && props.onEditorReady) {
+            props.onEditorReady(editor);
+          }
+        }, [editor, props.onEditorReady]);
+        // --- END: Call onEditorReady --- //
+
         // Handle editor:setContent
         React.useEffect(() => {
           const handleSetContent = async (event: CustomEvent) => {
             if (event.detail && typeof event.detail.content === 'string') {
               const markdownString = event.detail.content;
+              // Extract the artifactId from the event if provided
+              const sourceArtifactId = event.detail.artifactId;
+              console.log(`Editor: Received setContent event with artifactId: ${sourceArtifactId}`);
+              
               if (!markdownString) {
                 editor.replaceBlocks(editor.document, []);
-                if (props.onChange) props.onChange([]); // Notify parent of clear
+                if (props.onChange) props.onChange([], sourceArtifactId); // Pass artifactId to onChange
                 return;
               }
               try {
@@ -109,7 +121,7 @@ const BlockNoteEditor = dynamic(
                 editor.replaceBlocks(editor.document, newBlocks);
                 // Use props.onChange if available
                 if (props.onChange) {
-                  props.onChange(newBlocks); // Notify parent of update
+                  props.onChange(newBlocks, sourceArtifactId); // Pass artifactId to onChange
                 }
                 if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
               } catch (error) {
@@ -231,27 +243,6 @@ const BlockNoteEditor = dynamic(
           return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
         }, [editor, props.onContentAccessRequest, props.currentContent]); // Dependencies for the handler
 
-        // *** MODIFIED Effect: Update editor content ONLY when artifactId changes ***
-        React.useEffect(() => {
-          // Check if artifactId has changed
-          if (props.artifactId !== prevArtifactIdRef.current) {
-             console.log(`Editor (Inner): Artifact changed from ${prevArtifactIdRef.current} to ${props.artifactId}. Replacing content.`);
-             const newContent = props.initialContent && props.initialContent.length > 0 
-                ? props.initialContent 
-                : [{
-                    id: "default", type: "paragraph", props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
-                    content: [], children: []
-                  }];
-
-             // Only replace if new content is actually different from current document
-             if (!isEqual(editor.document, newContent)) {
-                 editor.replaceBlocks(editor.document, newContent);
-             }
-             prevArtifactIdRef.current = props.artifactId; // Update ref AFTER processing
-          }
-          // No dependency on props.initialContent here, only artifactId and editor
-        }, [props.artifactId, editor, props.initialContent]); // Include initialContent to get latest if artifactId changes
-
         // *** MODIFIED onChange handler: Removed isProgrammaticChange logic ***
         React.useEffect(() => {
           if (!props.onChange) return;
@@ -291,7 +282,7 @@ const ThemeAwareEditor = dynamic(
 
 interface EditorProps {
   initialContent?: Block[];
-  onChange?: (content: Block[]) => void;
+  onChange?: (content: Block[], sourceArtifactId?: string) => void;
   artifactId?: string;
   userId?: string;
   onContentAccessRequest?: (content: Block[]) => void;
@@ -299,6 +290,8 @@ interface EditorProps {
   setAiStatus?: (status: { isProcessing: boolean; message?: string }) => void; 
   // NEW: Need to pass down currentContent if used inside BlockNoteEditor dynamic import
   currentContent?: Block[]; 
+  // NEW: Add onEditorReady prop
+  onEditorReady?: (editor: BlockNoteEditorType) => void;
 }
 
 // Rename the original function component
@@ -310,7 +303,9 @@ const EditorComponent = ({
   onContentAccessRequest,
   // Ensure these are passed down if needed by the inner component's effects/handlers
   setAiStatus, 
-  currentContent 
+  currentContent,
+  // NEW: Add onEditorReady prop
+  onEditorReady
 }: EditorProps) => {
   // State to track content updates from AI (might be needed for keying/remounting)
   const [aiContent, setAiContent] = React.useState<Block[] | null>(null);
@@ -358,7 +353,7 @@ const EditorComponent = ({
       )}
       <ThemeAwareEditor 
         // Key logic remains important 
-        key={`editor-${artifactId}-${safeInitialContent ? 'has-content' : 'empty'}`}
+        key={`editor-${artifactId}`}
         initialContent={safeInitialContent}
         // Pass down necessary state and functions
         onChange={(blocks) => {
@@ -366,7 +361,7 @@ const EditorComponent = ({
           setAiContent(null); // User edited, clear AI content override
           setInternalCurrentContent(blocks); // Update internal state
           if (onChange) {
-            onChange(blocks); // Call parent handler
+            onChange(blocks); // Call parent handler with no artifactId (user edit)
           }
         }}
         // Pass down the state setter and current content for the inner component
@@ -376,6 +371,8 @@ const EditorComponent = ({
         EditorComponent={BlockNoteEditor} // Pass the dynamically loaded inner editor
         artifactId={artifactId}
         userId={userId}
+        // NEW: Pass onEditorReady prop
+        onEditorReady={onEditorReady}
       />
     </div>
   );

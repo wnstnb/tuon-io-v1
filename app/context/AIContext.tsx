@@ -9,6 +9,8 @@ import { ConversationService } from '../lib/services/ConversationService';
 import { UserService } from '../lib/services/UserService';
 import { CreatorAgentService, IntentAnalysisResult } from '../lib/services/CreatorAgentService';
 import { useSupabase } from '../context/SupabaseContext';
+import { useRouter } from 'next/navigation';
+import { ArtifactService } from '../lib/services/ArtifactService';
 
 // Define supported AI models
 export type AIModelType = 
@@ -54,6 +56,7 @@ export interface Conversation {
   model: AIModelType;
   createdAt: Date;
   updatedAt: Date;
+  artifactId?: string; // <-- ADDED: Link to artifact
 }
 
 // Define editor context type for intent analysis
@@ -82,11 +85,14 @@ interface AIContextType {
   conversationHistory: Conversation[];
   searchHistory: SearchHistoryItem[];
   setSearchHistory: React.Dispatch<React.SetStateAction<SearchHistoryItem[]>>;
-  createNewConversation: (model?: AIModelType) => void;
+  createNewConversation: (model?: AIModelType, artifactIdToLink?: string) => void;
   sendMessage: (content: string, imageDataUrl?: string | null, editorContext?: EditorContext, searchOptions?: SearchOptions) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
   loadUserConversations: () => Promise<void>;
+  updateEditorContext: (context?: EditorContext) => void;
+  getCurrentEditorContext: () => EditorContext | undefined;
+  findConversationByArtifactId: (artifactId: string) => Conversation | undefined;
 }
 
 // Create the AI context
@@ -125,6 +131,7 @@ export function AIProvider({ children }: AIProviderProps) {
   // State for API clients
   const [openaiClient, setOpenaiClient] = useState<any>(null);
   const [genaiClient, setGenaiClient] = useState<any>(null);
+  const router = useRouter();
   
   const [currentModel, setCurrentModel] = useState<AIModelType>('gpt-4o');
   const [isLoading, setIsLoading] = useState(false);
@@ -134,6 +141,17 @@ export function AIProvider({ children }: AIProviderProps) {
   const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const { user: currentUser } = useSupabase();
+  const [editorContextRef, setEditorContextRef] = useState<EditorContext | undefined>(undefined);
+
+  // --- Utility Function to Update Editor Context ---
+  const updateEditorContext = useCallback((context?: EditorContext) => {
+    setEditorContextRef(context);
+  }, []);
+
+  // --- Utility Function to Get Current Editor Context ---
+   const getCurrentEditorContext = useCallback((): EditorContext | undefined => {
+     return editorContextRef;
+   }, [editorContextRef]);
 
   // Helper function to get AI response based on model type
   const getAIResponse = async (conversation: Conversation, content: string, imageDataUrl?: string | null): Promise<string> => {
@@ -290,11 +308,15 @@ export function AIProvider({ children }: AIProviderProps) {
 
   // Load user conversations from Supabase
   const loadUserConversations = useCallback(async () => {
+    // Guard against running if already loading
+    if (isLoadingConversations) {
+      console.log('loadUserConversations skipped: Already loading.');
+      return;
+    }
+    console.log('Attempting to load user conversations...');
+    setIsLoadingConversations(true);
+    let fetchedConversations: Omit<Conversation, 'messages'>[] = [];
     try {
-      setIsLoadingConversations(true);
-      const { UserService } = await import('../lib/services/UserService');
-      const { ConversationService } = await import('../lib/services/ConversationService');
-      
       // Check if user is authenticated
       const currentUser = await UserService.getCurrentUser();
       if (!currentUser) {
@@ -305,23 +327,54 @@ export function AIProvider({ children }: AIProviderProps) {
       
       // Get user conversations (metadata only) from database
       const conversationsMetadata = await ConversationService.getUserConversations(currentUser.id);
-      
+      console.log(`Fetched ${conversationsMetadata.length} conversation metadata items.`);
+
       if (conversationsMetadata && conversationsMetadata.length > 0) {
         // Map metadata to Conversation objects (initially without messages)
-        const conversations = conversationsMetadata.map(meta => ({ ...meta, messages: undefined }));
+        // Ensure artifactId is mapped correctly
+        const conversations = conversationsMetadata.map(meta => ({
+           ...meta,
+           messages: undefined,
+           // artifactId: meta.artifactId // This should already be included by ConversationService
+         }));
+        fetchedConversations = conversations; // Store fetched conversations
         setConversationHistory(conversations);
-        
+        console.log('Conversation history set with metadata.');
+
         // If we have no active conversation, set the most recent one (metadata only for now)
+        // Consider artifactId in URL when selecting initial conversation
         if (!currentConversation) {
-          const mostRecent = conversations[0]; 
-          setCurrentConversation(mostRecent); // Messages will be loaded by useEffect below
-          setCurrentModel(mostRecent.model);
+          const urlArtifactId = new URLSearchParams(window.location.search).get('artifactId');
+          let conversationToSelect: Conversation | undefined = undefined;
+
+          if (urlArtifactId) {
+             console.log(`URL has artifactId: ${urlArtifactId}, trying to find matching conversation.`);
+             // Find the conversation linked to the artifact in the URL
+             conversationToSelect = conversations.find(c => c.artifactId === urlArtifactId);
+             if (conversationToSelect) {
+                 console.log(`Found conversation ${conversationToSelect.id} linked to artifact ${urlArtifactId}.`);
+             }
+          }
+
+          // If no matching conversation found for URL artifact, or no URL artifact, select most recent
+          if (!conversationToSelect) {
+             conversationToSelect = conversations[0];
+             console.log(`No matching conversation for URL artifact or no URL artifact. Selecting most recent conversation: ${conversationToSelect.id}`);
+          }
+
+          // Set the selected conversation (triggers message loading via useEffect)
+          setCurrentConversation(conversationToSelect); // Messages will be loaded by useEffect below
+          setCurrentModel(conversationToSelect.model);
+          console.log(`Set current conversation to ${conversationToSelect.id}.`);
+        } else {
+           console.log(`Current conversation already exists (ID: ${currentConversation.id}), not changing.`);
         }
       }
     } catch (error) {
       console.error('Error loading conversations:', error);
     } finally {
       setIsLoadingConversations(false);
+      console.log('Finished loading user conversations.');
     }
   }, []);
 
@@ -387,46 +440,125 @@ export function AIProvider({ children }: AIProviderProps) {
   }, [currentConversation?.id, currentConversation?.messages]); 
   // --- End REVISED useEffect Hook ---
 
+  // --- NEW: Helper to find conversation by artifactId ---
+  const findConversationByArtifactId = useCallback((artifactId: string): Conversation | undefined => {
+    if (!artifactId) return undefined;
+    // Search the current history
+    const found = conversationHistory.find(conv => conv.artifactId === artifactId);
+    console.log(`findConversationByArtifactId searched for ${artifactId}, found: ${found?.id}`);
+    return found;
+  }, [conversationHistory]);
+  // --- END Helper ---
+
   // Create a new conversation
-  const createNewConversation = async (model?: AIModelType) => {
+  const createNewConversation = async (model?: AIModelType, artifactIdToLink?: string) => {
+    console.log(`AIContext: createNewConversation called. Linking to artifact: ${artifactIdToLink}`); // Log entry
     const newModel = model || currentModel;
-    
+    let finalArtifactId = artifactIdToLink;
+    let artifactJustCreated = false;
+
+    // Ensure user is available
+    const user = await UserService.getCurrentUser();
+    if (!user) {
+       console.error("Cannot create conversation or artifact: User not logged in.");
+       alert("You must be logged in to create conversations and artifacts.");
+       return;
+    }
+
+    // If no artifactId is provided, create a new one
+    if (!finalArtifactId) {
+      try {
+        console.log("No artifactId provided, creating a new artifact...");
+        finalArtifactId = await ArtifactService.createArtifact(user.id, 'Untitled Artifact');
+        if (!finalArtifactId) {
+           throw new Error("ArtifactService.createArtifact returned undefined ID");
+        }
+        console.log(`New artifact created with ID: ${finalArtifactId}`);
+        artifactJustCreated = true; // Flag that we created it
+      } catch (error) {
+        console.error('Error creating linked artifact:', error);
+        alert('Failed to create the associated artifact. Cannot create conversation.');
+        return; // Stop if artifact creation fails
+      }
+    }
+
+    // --- ADD LOG: Check the determined artifact ID --- //
+    console.log(`AIContext: createNewConversation determined finalArtifactId: ${finalArtifactId}. artifactJustCreated: ${artifactJustCreated}`);
+
+    // --- NEW: Generate Conversation ID Client-Side --- //
+    const newConversationId = crypto.randomUUID();
+    console.log(`Generated new conversation ID client-side: ${newConversationId}`);
+    // --- END NEW ---
+
+    // --- REMOVED tempId variable --- //
     const newConversation: Conversation = {
-      id: createId(),
+      id: newConversationId, // Use generated ID directly
       title: 'New Conversation',
       messages: [],
       model: newModel,
       createdAt: new Date(),
       updatedAt: new Date(),
+      artifactId: finalArtifactId, // Link the artifact
     };
-    
+
+    // Add to local state immediately with the final ID
+    console.log(`AIContext: About to set history and currentConversation (ID: ${newConversationId})`); // Log before state update
     setConversationHistory(prev => [newConversation, ...prev]);
     setCurrentConversation(newConversation);
-    
+    console.log(`AIContext: Finished setting currentConversation (ID: ${newConversationId}). Object:`, newConversation); // Log after state update
+
     try {
-      // If user is authenticated, create conversation in database
-      const { UserService } = await import('../lib/services/UserService');
-      const { ConversationService } = await import('../lib/services/ConversationService');
-      
-      const currentUser = await UserService.getCurrentUser();
-      if (currentUser) {
-        // Create in database and update local ID
-        const conversationId = await ConversationService.createConversation(
-          currentUser.id,
-          newConversation.title
+      // --- NEW: Ensure artifact exists in DB BEFORE creating conversation --- //
+      if (finalArtifactId) { // Should always have an ID here now
+        console.log(`Ensuring artifact ${finalArtifactId} exists in DB...`);
+        // We assume createArtifactWithId is designed to handle potential duplicates gracefully
+        // or we handle potential errors appropriately.
+        await ArtifactService.createArtifactWithId(
+          finalArtifactId, 
+          user.id, 
+          'Untitled Artifact', // Default title for now
+          [] // Default empty content for now
         );
-        
-        // Update the ID in our local state
-        newConversation.id = conversationId;
-        setCurrentConversation({...newConversation});
-        setConversationHistory(prev => 
-          prev.map(conv => 
-            conv.id === newConversation.id ? {...newConversation} : conv
-          )
-        );
+        // TODO: Add more robust error handling or check if artifact truly exists if needed
+        console.log(`Artifact ${finalArtifactId} should now exist in DB.`);
+      } else {
+          // This case should ideally not be reached if logic is correct elsewhere
+          throw new Error("finalArtifactId was unexpectedly null before creating conversation.");
       }
+      // --- END Ensure Artifact --- //
+
+      // Create conversation in database, passing the generated ID
+      // Note: We don't strictly need the returned ID anymore, but we await completion.
+      await ConversationService.createConversation(
+        user.id,
+        newConversation.title,
+        finalArtifactId, // Pass the artifact ID to the service
+        newConversationId // Pass the generated conversation ID
+      );
+
+      // --- REMOVED State update logic after DB call (no longer needed) ---
+      // newConversation.id = conversationId;
+      // setCurrentConversation({ ...newConversation }); 
+      // setConversationHistory(prev => ... );
+      // --- END REMOVED --- 
+
+      console.log(`Conversation (ID: ${newConversationId}) saved to DB and linked to Artifact (ID: ${finalArtifactId})`);
+
+      // If we just created the artifact, navigate to it ONLY if necessary
+      if (artifactJustCreated && finalArtifactId) {
+        const currentUrlArtifactId = new URLSearchParams(window.location.search).get('artifactId');
+        if (finalArtifactId !== currentUrlArtifactId) {
+            console.log(`Navigating to newly created artifact: ${finalArtifactId}`);
+            router.push(`/editor?artifactId=${finalArtifactId}`);
+        } else {
+             console.log(`Already on the correct artifact URL (${finalArtifactId}), skipping navigation.`);
+        }
+      }
+
     } catch (error) {
       console.error('Error creating conversation in database:', error);
+      // TODO: Handle DB creation error (e.g., remove conversation from local state?)
+      alert('Failed to save the new conversation.');
     }
   };
 
@@ -437,8 +569,26 @@ export function AIProvider({ children }: AIProviderProps) {
     editorContext?: EditorContext,
     searchOptions?: SearchOptions
   ) => {
-    if (!currentConversation) return;
+    // Add detailed logging about the current conversation and its artifact ID
+    console.log(`[AIContext] sendMessage called with current conversation ID: ${currentConversation?.id}`);
+    console.log(`[AIContext] Current conversation artifact ID: ${currentConversation?.artifactId}`);
+    if (editorContext) {
+      console.log(`[AIContext] Editor context provided: ${JSON.stringify({
+        currentFile: editorContext.currentFile,
+        hasSelection: !!editorContext.selection,
+        hasCursorPosition: !!editorContext.cursorPosition,
+        hasEditorContent: !!editorContext.editorContent,
+        selectedBlockCount: editorContext.selectedBlockIds?.length || 0
+      })}`);
+    }
     
+    // Check 1: No current conversation?
+    console.log('AIContext: sendMessage called. Current conversation:', currentConversation?.id, currentConversation); // Log conversation state
+    if (!currentConversation) {
+      console.error('AIContext: sendMessage aborted, no current conversation.');
+      return;
+    }
+
     let currentUser: { id: string } | null = null;
     try {
       currentUser = await UserService.getCurrentUser();
@@ -446,9 +596,10 @@ export function AIProvider({ children }: AIProviderProps) {
       console.error('Error fetching current user:', error);
       // Optionally, handle the case where the user isn't available
     }
-    
+    console.log('AIContext: Fetched user:', currentUser?.id);
+
     try {
-      setIsLoading(true);
+      setIsLoading(true); // Should show loading state
       
       // Clone current conversation to avoid mutation issues
       const updatedConversation = { ...currentConversation };
@@ -769,9 +920,11 @@ export function AIProvider({ children }: AIProviderProps) {
         console.log('[AIContext] Dispatching editor:setContent event with full markdown string.'); // Added prefix
         const editorContentEvent = new CustomEvent('editor:setContent', {
           detail: {
-            content: (creatorResponse as any).content 
+            content: (creatorResponse as any).content,
+            artifactId: currentConversation?.artifactId // Include the artifact ID from the current conversation
           }
         });
+        console.log(`[AIContext] Including artifact ID: ${currentConversation?.artifactId} with editor content event`); // Log the artifact ID
         window.dispatchEvent(editorContentEvent);
 
       } else if (creatorResponse.editorContent && intentAnalysis.destination === 'EDITOR') {
@@ -791,9 +944,11 @@ export function AIProvider({ children }: AIProviderProps) {
         
         const editorContentEvent = new CustomEvent('editor:setContent', {
           detail: {
-            content: finalContent // Use potentially cleaned content
+            content: finalContent, // Use potentially cleaned content
+            artifactId: currentConversation?.artifactId // Include the artifact ID from the current conversation
           }
         });
+        console.log(`[AIContext] Including artifact ID: ${currentConversation?.artifactId} with editor content event (fallback)`); // Log the artifact ID
         window.dispatchEvent(editorContentEvent);
 
       } else if (creatorResponse.editorContent) {
@@ -832,8 +987,22 @@ export function AIProvider({ children }: AIProviderProps) {
       console.log(`Selecting conversation: ${id}. Messages will lazy load.`);
       // Set the conversation (metadata + potentially undefined messages)
       // The useEffect hook above will trigger the message loading
-      setCurrentConversation(conversation); 
+      setCurrentConversation(conversation);
       setCurrentModel(conversation.model);
+
+      // NEW: Navigate to linked artifact if it exists AND URL is different
+      if (conversation.artifactId) {
+        const currentUrlArtifactId = new URLSearchParams(window.location.search).get('artifactId');
+        if (conversation.artifactId !== currentUrlArtifactId) {
+            console.log(`Conversation has linked artifactId: ${conversation.artifactId}. Navigating...`);
+            router.push(`/editor?artifactId=${conversation.artifactId}`);
+        } else {
+             console.log(`Already on the correct artifact URL (${conversation.artifactId}), skipping navigation.`);
+        }
+      } else {
+        // Optional: Handle conversations without artifacts? Maybe navigate away from editor?
+        console.log(`Conversation ${id} has no linked artifact.`);
+      }
     }
   };
 
@@ -878,7 +1047,10 @@ export function AIProvider({ children }: AIProviderProps) {
         sendMessage,
         selectConversation,
         switchModel,
-        loadUserConversations
+        loadUserConversations,
+        updateEditorContext,
+        getCurrentEditorContext,
+        findConversationByArtifactId
       }}
     >
       {children}

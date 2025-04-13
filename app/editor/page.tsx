@@ -10,13 +10,18 @@ import TitleBar from '../components/TitleBar';
 import LeftPane from '../components/LeftPane';
 import RightPane from '../components/RightPane';
 import GlobalSearch from '../components/GlobalSearch';
-import { type Block, type PartialBlock } from "@blocknote/core";
+import { type Block, type PartialBlock, BlockNoteEditor } from "@blocknote/core";
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
 import { User } from '@supabase/supabase-js';
 import { ArtifactService } from '../lib/services/ArtifactService';
 import { debounce, throttle } from 'lodash-es';
 import { ImageService } from '../lib/services/ImageService';
+import { useAI } from '../context/AIContext';
+import { Loader2 } from 'lucide-react';
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/react/style.css";
+import { ArtifactNotFoundError } from '../lib/services/ArtifactService';
 
 // Use dynamic import with SSR disabled for ThemeToggle
 const ThemeToggle = dynamic(
@@ -39,7 +44,15 @@ function EditorPageContent() {
   const searchParams = useSearchParams();
   const artifactIdParam = searchParams.get('artifactId'); // Renamed for clarity
 
-  const { signOut, user, isLoading } = useSupabase();
+  const { signOut, user, isLoading: isSupabaseLoading } = useSupabase();
+  const { 
+    findConversationByArtifactId, 
+    selectConversation, 
+    createNewConversation,
+    currentConversation,
+    isLoading: isAILoading
+  } = useAI();
+
   const [title, setTitle] = useState<string>('Untitled Artifact');
   const [editorContent, setEditorContent] = useState<Block[]>([]);
   const [showLeftPanel, setShowLeftPanel] = useState(true);
@@ -67,14 +80,36 @@ function EditorPageContent() {
   const [isSyncing, setIsSyncing] = useState<boolean>(false); // DB sync operation in progress
   const [lastSyncError, setLastSyncError] = useState<string | null>(null); // Store last sync error message
   const [userHasManuallySetTitle, setUserHasManuallySetTitle] = useState<boolean>(false); // NEW: Track manual title edits
+  const [pendingSyncArtifactId, setPendingSyncArtifactId] = useState<string | null>(null); // ID waiting for DB sync
+  const [lastSuccessfulSyncTime, setLastSuccessfulSyncTime] = useState<Date | null>(null); // NEW: Track last successful sync time
+
+  // --- NEW: Calculate SyncStatus based on state --- //
+  const getSaveStatus = useCallback((): SyncStatus => {
+    if (lastSyncError) return 'error';
+    if (isSyncing) return 'syncing';
+    if (isSyncPending) return 'pending';
+    if (!isDirty && !isSyncPending) return 'synced'; // Explicitly 'synced'
+    return 'idle'; // Default to idle if conditions above not met (e.g., isDirty but not yet pending)
+  }, [isDirty, isSyncing, isSyncPending, lastSyncError]);
+  // --- END SyncStatus Calculation --- //
 
   // Ref to track if component is mounted to avoid state updates after unmount
   const isMounted = useRef(true);
+  const editorRef = useRef<BlockNoteEditor | null>(null); // Ref to store editor instance
+
   useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
   }, []);
   // -- END NEW State Management --
+
+  // --- Force Sync Function --- //
+  const forceSync = useCallback(() => {
+    if (!currentArtifactId) return;
+    console.log(`Manual sync triggered for artifact: ${currentArtifactId}.`);
+    // Directly call the latest sync logic, passing the current ID
+    latestSyncFn.current(currentArtifactId);
+  }, [currentArtifactId]);
 
   // Basic UI interaction callbacks
   const toggleLeftPanel = useCallback(() => {
@@ -261,16 +296,44 @@ function EditorPageContent() {
   }, []);
   // --- END Helper Function ---
 
-  // --- NEW: Core Sync Logic (to be throttled) ---
-  // Renamed to Core, removed useCallback as it's handled by the ref pattern now
-  const syncToDatabaseCore = async () => {
+  // --- NEW: Core Sync Logic (with error handling for not found) ---
+  const syncToDatabaseCore = async (syncIdOverride?: string) => {
+    // Use override if provided (manual sync), otherwise use the CURRENT artifact ID
+    // This is the crucial change - we always want to use the current artifact ID
+    const idToSync = syncIdOverride || currentArtifactId;
+
     // Use state directly here as the ref pattern ensures the latest state is available
-    if (!user || !currentArtifactId || !isSyncPending || isSyncing) {
-      console.log('Sync skipped:', { hasUser: !!user, currentArtifactId, isSyncPending, isSyncing });
+    // --- Check if ID to sync is valid --- //
+    if (!user || !idToSync || isSyncing) {
+      console.warn(`Sync skipped because a condition was not met:`, {
+        hasUser: !!user,
+        hasIdToSync: !!idToSync,
+        isSyncing: isSyncing
+      });
       return;
     }
 
-    console.log(`Attempting DB sync for artifact: ${currentArtifactId}`);
+    // --- Log IDs for debugging --- //
+    console.log(`syncToDatabaseCore: Syncing with current artifact ID: ${currentArtifactId}, idToSync: ${idToSync}`);
+    // --- END Log --- //
+    
+    // --- Only proceed if sync is actually pending for THIS artifact --- //
+    // Read local storage JUST for the update time to check if sync is needed
+    let localTimestamp: string | null = null;
+    try {
+      const localDataString = localStorage.getItem(`artifact-data-${idToSync}`);
+      if (localDataString) {
+        localTimestamp = JSON.parse(localDataString).updatedAt;
+      }
+    } catch { /* ignore parsing error here */ }
+    
+    if (!isSyncPending && !syncIdOverride) { // Don't skip if manually forced via override
+        console.log(`Sync skipped for ${idToSync}: isSyncPending is false.`);
+        return;
+    }
+    // --- End Check --- //
+
+    console.log(`Attempting DB sync for artifact: ${idToSync}`);
     if (isMounted.current) {
       setIsSyncing(true);
       setLastSyncError(null); // Clear previous error on new attempt
@@ -278,7 +341,9 @@ function EditorPageContent() {
 
     let dataToSync: LocalArtifactData | null = null;
     try {
-      const localDataString = localStorage.getItem(`artifact-data-${currentArtifactId}`);
+      // CRITICAL: Read from localStorage using idToSync, not pendingSyncArtifactId
+      // This ensures we're syncing the right data for the right artifact
+      const localDataString = localStorage.getItem(`artifact-data-${idToSync}`);
       if (localDataString) {
         dataToSync = JSON.parse(localDataString);
       }
@@ -302,63 +367,137 @@ function EditorPageContent() {
       return;
     }
 
+    // --- ADD DIAGNOSTIC LOG (Simplified) --- //
+    console.log(`syncToDatabaseCore: About to sync artifact ${idToSync}.`, { // Use idToSync
+      title: dataToSync.title,
+      contentBlockCount: dataToSync.content?.length ?? 0 // Log block count
+    });
+    // --- END DIAGNOSTIC LOG --- //
+
+    // --- Log content read from storage --- //
+    console.log(`syncToDatabaseCore: Read from localStorage: title='${dataToSync.title}', blockCount=${dataToSync.content?.length ?? 0}`, { content: JSON.stringify(dataToSync.content?.slice(0, 1)) }); // Log first block
+
+    // --- ADD MORE DETAILED LOGGING ---
+    console.log(`syncToDatabaseCore: Current artifact persistence state: isArtifactPersisted=${isArtifactPersisted}`);
+    console.log(`syncToDatabaseCore: Current artifact ID vs sync ID: currentArtifactId=${currentArtifactId}, idToSync=${idToSync}`);
+    // --- END ADDITIONAL LOGGING ---
+
+    let success = false; // Initialize success flag
+    let syncAttemptError: any = null; // Store potential errors
+
     try {
-      let success = false;
-      if (!isArtifactPersisted) {
-        console.log('Creating new artifact on server...');
+      // Determine if we should attempt create or update
+      // TODO: Refine this persistence check - it's still a potential source of issues.
+      // Maybe query DB explicitly if unsure?
+      const assumePersisted = isArtifactPersisted || (idToSync !== currentArtifactId);
+      console.log(`syncToDatabaseCore: Assuming artifact ${idToSync} is persisted: ${assumePersisted}`);
+
+      if (!assumePersisted) {
+        console.log(`syncToDatabaseCore: Entering CREATE path for artifact ${idToSync}...`);
         success = await ArtifactService.createArtifactWithId(
-          currentArtifactId,
+          idToSync,
           user.id,
           dataToSync.title,
           dataToSync.content
         );
         if (success && isMounted.current) {
-          setIsArtifactPersisted(true);
+          setIsArtifactPersisted(true); // Mark as persisted after successful creation
           // Update URL if needed (only if we started without an artifactIdParam)
           if (!artifactIdParam) {
             const url = new URL(window.location.href);
-            url.searchParams.set('artifactId', currentArtifactId);
+            url.searchParams.set('artifactId', idToSync);
             window.history.replaceState({}, '', url.toString());
           }
         }
       } else {
-        console.log('Updating existing artifact on server...');
-        // Perform update (consider combining title/content update in service later)
-        // For simplicity, update both even if only one might have changed since last *local* save
-        await ArtifactService.updateArtifactTitle(currentArtifactId, dataToSync.title);
-        success = await ArtifactService.updateArtifactContent(
-          currentArtifactId,
-          dataToSync.content,
-          user.id
-        );
+        // --- UPDATED: Wrap UPDATE logic in try/catch for ArtifactNotFoundError ---
+        console.log(`syncToDatabaseCore: Entering UPDATE path for artifact ${idToSync}...`);
+        try {
+          // Try updating title first (if combined later, adjust logic)
+          // Note: updateArtifactTitle now throws ArtifactNotFoundError if it doesn't exist
+          await ArtifactService.updateArtifactTitle(idToSync, dataToSync.title, user.id);
+
+          // Then try updating content
+          // Note: updateArtifactContent also throws ArtifactNotFoundError if it doesn't exist
+          success = await ArtifactService.updateArtifactContent(
+            idToSync,
+            dataToSync.content,
+            user.id
+          );
+          // If both updates succeed (or content update succeeds after title), mark overall success
+          // If title update failed with ArtifactNotFound, the content update won't run.
+          // If title succeeded but content failed with ArtifactNotFound, success will be false.
+
+        } catch (updateError: any) {
+          if (updateError instanceof ArtifactNotFoundError) {
+            console.warn(`syncToDatabaseCore: Update failed because artifact ${idToSync} not found. Attempting CREATE instead.`);
+            // The artifact we tried to update doesn't exist, so try creating it.
+            try {
+              success = await ArtifactService.createArtifactWithId(
+                idToSync,
+                user.id,
+                dataToSync.title,
+                dataToSync.content
+              );
+              if (success && isMounted.current) {
+                setIsArtifactPersisted(true); // Mark as persisted after successful creation
+                // Update URL if needed
+                if (!artifactIdParam) {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('artifactId', idToSync);
+                  window.history.replaceState({}, '', url.toString());
+                }
+              }
+            } catch (createError: any) {
+              console.error(`syncToDatabaseCore: Fallback CREATE attempt for ${idToSync} also failed:`, createError);
+              syncAttemptError = createError; // Store the creation error
+              success = false;
+            }
+          } else {
+            // Re-throw other update errors to be caught by the outer catch block
+            throw updateError;
+          }
+        }
+        // --- END UPDATED try/catch --- //
       }
 
+      // --- State updates based on final success/failure --- //
       if (success) {
-        console.log('DB sync successful.');
+        console.log(`DB sync successful for ${idToSync}.`);
         if (isMounted.current) {
-          setIsSyncPending(false); // Data sent is now synced
+          setIsSyncPending(false);
           setLastSyncError(null);
+          setLastSuccessfulSyncTime(new Date());
+          if (idToSync === pendingSyncArtifactId) {
+            setPendingSyncArtifactId(null); // Clear pending ID only if this sync was for it
+          }
         }
       } else {
-        console.error('DB sync failed (API reported failure).');
-         if (isMounted.current) {
-           setLastSyncError("Failed to save changes to server.");
-           // Keep isSyncPending true
-         }
+        console.error(`DB sync failed for ${idToSync} (API reported failure or fallback create failed).`);
+        if (isMounted.current) {
+          // Use the specific error if available, otherwise generic message
+          const errorMessage = syncAttemptError?.message || "Failed to save changes to server.";
+          setLastSyncError(errorMessage);
+          // Keep isSyncPending true, DO NOT clear pendingSyncArtifactId on failure
+        }
       }
+
     } catch (error: any) {
-      console.error('Error during DB sync:', error);
+      // Catch errors from the initial CREATE attempt or re-thrown errors from UPDATE attempt
+      console.error(`Error during DB sync process for ${idToSync}:`, error);
       if (isMounted.current) {
         setLastSyncError(`Sync error: ${error.message || 'Unknown error'}`);
-        // Keep isSyncPending true
+        // Keep isSyncPending true, DO NOT clear pendingSyncArtifactId on exception
       }
+      // success remains false
     } finally {
       if (isMounted.current) {
         setIsSyncing(false);
       }
     }
+    return success;
   };
-  // --- END Core Sync Logic ---
+  // --- END UPDATED Core Sync Logic ---
 
   // --- NEW: Ref + Effect to keep sync logic up-to-date ---
   const latestSyncFn = useRef(syncToDatabaseCore);
@@ -373,61 +512,69 @@ function EditorPageContent() {
   // useMemo ensures the throttle function itself is stable
   const throttledDbSync = useMemo(() =>
     throttle(() => {
+        // ADDED: Log state *before* calling the sync function
+        console.log(`Throttled function executing. Checking conditions...`, {
+          hasUser: !!user, // Access user state here
+          pendingSyncArtifactId, // Access pending ID state here
+          isSyncing, // Access syncing state here
+        });
         latestSyncFn.current(); // Execute the latest sync logic
     }, 10000, { leading: true, trailing: true })
-  , []); // Empty dependency array is correct here - throttle function is created once
+  , [user, pendingSyncArtifactId, isSyncing]); // <-- ADD dependencies used in the log
   // --- END Throttled DB Sync ---
 
-  // --- NEW: Core Local Save Logic (to be debounced) ---
-  const saveToLocalStorage = useCallback((contentToSave: Block[], titleToSave: string) => {
-    if (!currentArtifactId) { // Removed isDirty check as it's implied by calling this
-      console.log('Local save skipped: No artifact ID');
-      return;
-    }
-
-    console.log(`Saving to local storage for artifact: ${currentArtifactId}`);
-    try {
-      const dataToStore: LocalArtifactData = {
-        content: contentToSave,   // Use passed content
-        title: titleToSave,       // Use passed title
-        updatedAt: new Date().toISOString(),
-      };
-      localStorage.setItem(`artifact-data-${currentArtifactId}`, JSON.stringify(dataToStore));
-
-      if (isMounted.current) {
-        setIsDirty(false); // Changes are now saved locally
-        setIsSyncPending(true); // Mark that these changes need DB sync
-        setLastSyncError(null); // Clear any previous error after successful local save
+  // --- NEW: Debounced Local Save Function ---
+  const debouncedLocalSave = useMemo(() => {
+    return debounce((content: Block[], titleToSave: string) => {
+      if (!isMounted.current) return;
+      
+      console.log(`Saving to localStorage: artifact=${currentArtifactId}, title=${titleToSave}, blocks=${content.length}`);
+      
+      try {
+        // Prepare the data object
+        const updatedAt = new Date().toISOString();
+        const artifactData: LocalArtifactData = {
+          content: content,
+          title: titleToSave,
+          updatedAt: updatedAt
+        };
+        
+        // Save the data to localStorage under the CURRENT artifact ID key
+        // This ensures we don't create a new artifact when the content is from AI generation
+        localStorage.setItem(`artifact-data-${currentArtifactId}`, JSON.stringify(artifactData));
+        
+        // Mark that syncing to DB is needed
+        if (isMounted.current) {
+          setIsSyncPending(true);
+          setPendingSyncArtifactId(currentArtifactId || null); // Handle undefined by using null
+          setIsDirty(false); // Changes are now saved locally
+          setLastSyncError(null); // Clear any previous error after successful local save
+        }
+      } catch (e) {
+        console.error('Error saving to localStorage:', e);
       }
-      // REMOVED: throttledDbSync(); - Sync will be triggered by useEffect watching isSyncPending
-
-    } catch (error) {
-      console.error('Error saving to local storage:', error);
-      // Optional: Indicate local save error state? For now, just log.
-    }
-    // Dependencies updated: Removed editorContent, title, isDirty
-  }, [currentArtifactId]); // REMOVED throttledDbSync from dependencies
-  // --- END Core Local Save ---
-
+    }, 1000, { leading: false, trailing: true });
+  }, [currentArtifactId]); // Add currentArtifactId as dependency
+  
   // --- NEW: Trigger Sync via Effect when Pending ---
   useEffect(() => {
     // If there are pending changes and we are not currently syncing,
-    // trigger the throttled sync function.
-    if (isSyncPending && !isSyncing && isMounted.current) {
-      console.log('useEffect triggering throttledDbSync due to isSyncPending=true');
+    // trigger the throttled sync function **using the pending ID**
+    // Update: syncToDatabaseCore now reads pendingSyncArtifactId, so just call throttle.
+    if (isSyncPending && pendingSyncArtifactId && !isSyncing && isMounted.current) {
+      console.log(`useEffect triggering throttledDbSync for pending artifact ${pendingSyncArtifactId}`);
+      // The throttled function calls latestSyncFn.current(), which will now use pendingSyncArtifactId
       throttledDbSync();
     }
-  }, [isSyncPending, isSyncing, throttledDbSync]); // Effect depends on these states/functions
+    // Ensure dependencies are correct
+  }, [isSyncPending, pendingSyncArtifactId, isSyncing, throttledDbSync]);
   // --- END Trigger Sync Effect ---
 
-  // --- NEW: Debounced Local Save Function ---
-  // Now expects content and title arguments
-  const debouncedLocalSave = useRef(
-    debounce((content: Block[], currentTitle: string) => {
-        saveToLocalStorage(content, currentTitle);
-    }, 3000)
-  ).current;
-  // --- END Debounced Local Save ---
+  // --- NEW: Editor Reference Setter --- //
+  const setEditorReference = useCallback((editor: BlockNoteEditor) => {
+    editorRef.current = editor;
+  }, []);
+  // --- END Editor Reference Setter --- //
 
   // --- UPDATED: Handle Title Changes ---
   const handleTitleChange = useCallback((newTitle: string) => {
@@ -442,15 +589,72 @@ function EditorPageContent() {
   }, [debouncedLocalSave, editorContent, userHasManuallySetTitle]); // Added editorContent dependency
 
   // --- UPDATED: Handle Content Changes ---
-  const handleContentChange = useCallback((content: Block[]) => {
-    setEditorContent(content); // Ensure this line is uncommented
+  const handleContentChange = useCallback((content: Block[], sourceArtifactId?: string) => {
+    console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
+    
+    // Check if content is coming from a different artifact (AI generation)
+    if (sourceArtifactId && sourceArtifactId !== currentArtifactId) {
+      console.log(`[ARTIFACT ID MISMATCH] Content change includes source artifactId ${sourceArtifactId}, different from current ${currentArtifactId}`);
+      console.log('This is likely content from AI generation. Using the correct artifact ID to prevent orphaned artifacts.');
+      
+      // First, save the existing data for the current artifact (if any)
+      try {
+        const existingData = localStorage.getItem(`artifact-data-${currentArtifactId}`);
+        if (existingData) {
+          // Save the data with a backup name in case we need to recover it
+          localStorage.setItem(`artifact-data-${currentArtifactId}-backup`, existingData);
+          console.log(`Backed up data for current artifact ${currentArtifactId} before switching`);
+        }
+      } catch (e) {
+        console.error('Error backing up current artifact data:', e);
+      }
+      
+      // Update the current artifact ID to match the source
+      // This ensures we don't create a new artifact when saving AI-generated content
+      setCurrentArtifactId(sourceArtifactId);
+      
+      // Since we're changing currentArtifactId, also update persistence flag
+      // This helps syncToDatabaseCore make the right decision about create vs update
+      setIsArtifactPersisted(true);
+      
+      console.log(`[ARTIFACT ID UPDATED] Current artifact ID has been updated to: ${sourceArtifactId}`);
+
+      // Now clear the sync pending for the old artifact ID
+      if (pendingSyncArtifactId !== sourceArtifactId) {
+        // We're switching artifacts, so any pending sync for the old one should be cancelled
+        setPendingSyncArtifactId(sourceArtifactId);
+        console.log(`Cleared pending sync for previous artifact ID, now tracking: ${sourceArtifactId}`);
+      }
+      
+      // Update the URL to match the new artifact ID
+      try {
+        const url = new URL(window.location.href);
+        const currentUrlArtifactId = url.searchParams.get('artifactId');
+        
+        if (currentUrlArtifactId !== sourceArtifactId) {
+          url.searchParams.set('artifactId', sourceArtifactId);
+          window.history.replaceState({}, '', url.toString());
+          console.log(`Updated URL to reflect new artifact ID: ${sourceArtifactId}`);
+        }
+      } catch (e) {
+        console.error('Error updating URL with new artifact ID:', e);
+      }
+    } else {
+      if (sourceArtifactId) {
+        console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
+      } else {
+        console.log(`Content change has no source artifactId (likely user edit)`);
+      }
+    }
+    
+    setEditorContent(content); // Update editor content state
     if (isMounted.current) {
       setIsDirty(true); // Mark editor as dirty
       setLastSyncError(null); // Clear error when user types
       // Trigger the debounce on content change, passing the new content and current title
       debouncedLocalSave(content, title);
     }
-  }, [debouncedLocalSave, title]); // Added title dependency
+  }, [debouncedLocalSave, title, currentArtifactId, pendingSyncArtifactId]); // Updated dependencies
 
   // Infer title based on content
   const inferTitle = useCallback(async (artifactId: string, contentForInference: Block[]) => {
@@ -595,7 +799,7 @@ function EditorPageContent() {
 
       // 4. Update Component State with RAW content
       if (isMounted.current) {
-        console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent.length}`);
+        console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent?.length ?? 0}`); // Log count
         setTitle(loadedTitle);
         setEditorContent(loadedContent); // <-- Set RAW content here
         setIsDirty(false);
@@ -619,6 +823,29 @@ function EditorPageContent() {
         }
       }
 
+      // --- NEW: Find or Create Linked Conversation --- //
+      if (isMounted.current) {
+        console.log(`Attempting to find/create conversation linked to artifact ${idToLoad}`);
+        const existingConversation = findConversationByArtifactId(idToLoad);
+
+        if (existingConversation) {
+          console.log(`Found existing conversation ${existingConversation.id}, selecting it.`);
+          // Only select if it's not already the current one
+          if (currentConversation?.id !== existingConversation.id) {
+            selectConversation(existingConversation.id);
+          } else {
+            console.log(`Conversation ${existingConversation.id} is already selected.`);
+          }
+        } else {
+          console.log(`No existing conversation found for artifact ${idToLoad}. Creating a new one.`);
+          // Pass the artifact ID to create a new, linked conversation
+          // Model selection can be default or potentially based on user preferences later
+          await createNewConversation(undefined, idToLoad);
+          console.log(`createNewConversation called for artifact ${idToLoad}.`);
+        }
+      }
+      // --- END Conversation Linking --- //
+
       // Post-load title inference
       const isPlaceholderTitle = !loadedTitle || loadedTitle === 'Untitled Artifact';
       // MODIFIED Check: Only infer if title is placeholder AND user hasn't manually set it yet
@@ -637,7 +864,7 @@ function EditorPageContent() {
         setLastSyncError("Unexpected error loading artifact.");
       }
     }
-  }, [inferTitle, user, currentArtifactId]); // <-- ADDED currentArtifactId dependency
+  }, [inferTitle, user, currentArtifactId, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]);
 
   // Listen for artifact selection events from FileExplorer
   useEffect(() => {
@@ -645,14 +872,21 @@ function EditorPageContent() {
       const { artifactId: selectedId } = event.detail;
       if (selectedId && user && selectedId !== currentArtifactId) {
         console.log(`Loading artifact from event: ${selectedId}`);
-        // Before loading, check if current artifact has unsaved changes THAT NEED SYNCING
-        if (isSyncPending && isMounted.current) {
+
+        // Flush any pending local save for the OLD artifact FIRST
+        console.log(`Flushing potential pending save for ${currentArtifactId}...`);
+        debouncedLocalSave.flush(); // <-- Changed from cancel()
+
+        // Now check if sync is pending (could have become true after flush)
+        if (isSyncPending && isMounted.current) { // Check isSyncPending *after* flush
            console.warn("Switching artifact with pending server changes. Attempting final sync...");
            // Attempt an immediate sync - use the *latest* function directly
-           latestSyncFn.current();
+           latestSyncFn.current(); // Use the ID stored in pendingSyncArtifactId
         }
-        // Cancel any pending debounced saves for the *old* artifact
-        debouncedLocalSave.cancel();
+
+        // No need to cancel anymore, we flushed.
+        // debouncedLocalSave.cancel(); // REMOVED
+
         loadArtifact(selectedId, user);
       }
     };
@@ -661,22 +895,33 @@ function EditorPageContent() {
       window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
     };
     // Removed syncToDatabase dependency, it's handled via latestSyncFn ref now
-  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]);
+    // Ensure debouncedLocalSave ref is stable if added to deps, but likely not needed as it's a stable ref.
+  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]);
 
   // Load artifact if ID is provided in URL and different from current
   useEffect(() => {
     if (artifactIdParam && user && artifactIdParam !== currentArtifactId) {
       console.log(`Loading artifact from URL: ${artifactIdParam}`);
-       if (isSyncPending && isMounted.current) {
+
+      // Flush any pending local save for the OLD artifact FIRST
+      console.log(`Flushing potential pending save for ${currentArtifactId}...`);
+      debouncedLocalSave.flush(); // <-- Changed from cancel()
+
+      // Now check if sync is pending (could have become true after flush)
+       if (isSyncPending && isMounted.current) { // Check isSyncPending *after* flush
            console.warn("Loading from URL with pending server changes. Attempting final sync...");
-           latestSyncFn.current(); // Attempt sync using latest logic
+           latestSyncFn.current(); // Attempt sync using latest logic (which uses pendingSyncArtifactId)
        }
-       // Cancel any pending debounced saves for the *old* artifact
-       debouncedLocalSave.cancel();
+
+       // No need to cancel anymore, we flushed.
+       // debouncedLocalSave.cancel(); // REMOVED
+
       loadArtifact(artifactIdParam, user);
     }
     // Removed syncToDatabase dependency
-  }, [artifactIdParam, user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]);
+    // --- Added AI context dependencies --- //
+    // Ensure debouncedLocalSave ref is stable if added to deps, but likely not needed as it's a stable ref.
+  }, [artifactIdParam, user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]);
 
   // --- NEW: beforeunload Handler ---
   useEffect(() => {
@@ -706,6 +951,50 @@ function EditorPageContent() {
     };
     // Removed syncToDatabase dependency
   }, [isSyncPending, debouncedLocalSave, throttledDbSync]);
+
+  // Define the handler function with the correct type using useCallback
+  const handleContentRequest = useCallback(async (event: CustomEvent) => {
+    console.log('EditorPageContent received requestContent event.');
+    if (!editorRef.current) {
+      console.error('Editor ref not available to get markdown.');
+      window.dispatchEvent(new CustomEvent('editor:contentResponse', {
+        detail: { error: 'Editor not ready' }
+      }));
+      return;
+    }
+
+    try {
+      // Generate markdown from current editor state
+      const markdown = await editorRef.current.blocksToMarkdownLossy(editorRef.current.document);
+      
+      // Get selected block IDs
+      const selectedBlockIds = editorRef.current.getSelection()?.blocks.map(b => b.id) || [];
+      
+      console.log('EditorPageContent dispatching contentResponse event.');
+      window.dispatchEvent(new CustomEvent('editor:contentResponse', {
+        detail: { markdown, selectedBlockIds }
+      }));
+    } catch (error) {
+      console.error('Error generating markdown or getting selection:', error);
+      window.dispatchEvent(new CustomEvent('editor:contentResponse', {
+        detail: { error: 'Failed to get editor content' }
+      }));
+    }
+  }, []); // Empty dependency array as handler logic doesn't depend on component state/props
+
+  // Use the correctly typed handler function reference in useEffect
+  useEffect(() => {
+    const listener = (event: Event) => {
+        // Type assertion needed here as addEventListener uses the generic Event type
+        handleContentRequest(event as CustomEvent);
+    };
+    window.addEventListener('editor:requestContent', listener);
+
+    return () => {
+      window.removeEventListener('editor:requestContent', listener);
+    };
+  }, [handleContentRequest]); // Depend on the handler function reference
+  // --- END Event Listener --- //
 
   // --- NEW useEffect Hook for Processing Image URLs ---
   useEffect(() => {
@@ -804,9 +1093,13 @@ function EditorPageContent() {
     };
   }, [editorContent, handleContentChange, currentArtifactId, user?.id]); // Dependencies updated
 
-  // Show a loading state if user data is still loading
-  if (isLoading) {
-    return <div className="loading">Loading user data...</div>;
+  // Show a loading state only if Supabase user data is still loading
+  if (isSupabaseLoading) {
+    return (
+      <div className="loading">
+        <Loader2 size={32} className="animate-spin" />
+      </div>
+    );
   }
 
   // --- UPDATED: Save Status Display Logic ---
@@ -823,6 +1116,28 @@ function EditorPageContent() {
       return `Dirty: ${isDirty} | Sync Pending: ${isSyncPending} | Syncing: ${isSyncing} | Persisted: ${isArtifactPersisted}`;
   };
   // --- END Save Status Display Logic ---
+
+  // Log artifact ID updates when it changes
+  useEffect(() => {
+    console.log(`[ARTIFACT TRACKING] Current artifact ID changed to: ${currentArtifactId}`);
+    console.log(`[ARTIFACT TRACKING] Artifact persistence state: ${isArtifactPersisted}`);
+    
+    // Check if there's any content in localStorage for this artifact
+    try {
+      const localData = localStorage.getItem(`artifact-data-${currentArtifactId}`);
+      if (localData) {
+        const parsed = JSON.parse(localData);
+        console.log(`[ARTIFACT TRACKING] Found localStorage data for ${currentArtifactId}:`, {
+          title: parsed.title,
+          contentLength: parsed.content.length
+        });
+      } else {
+        console.log(`[ARTIFACT TRACKING] No localStorage data found for ${currentArtifactId}`);
+      }
+    } catch (e) {
+      console.error('Error checking localStorage for artifact:', e);
+    }
+  }, [currentArtifactId, isArtifactPersisted]);
 
   return (
     <main className="app-container">
@@ -895,10 +1210,16 @@ function EditorPageContent() {
               <TitleBar 
                 initialTitle={title} 
                 onTitleChange={handleTitleChange} 
+                saveStatus={getSaveStatus()}
+                statusMessage={getSaveStatusMessage()}
+                isPersisted={isArtifactPersisted}
+                lastSynced={lastSuccessfulSyncTime ? lastSuccessfulSyncTime.toISOString() : null}
+                onForceSync={forceSync}
               />
               <Editor 
                 key={`editor-instance-${currentArtifactId}`}
                 {...editorProps}
+                onEditorReady={setEditorReference}
               />
               <EditorFAB 
                 artifactId={currentArtifactId}
