@@ -435,9 +435,8 @@ function EditorPageContent() {
 
   // --- UPDATED: Handle Content Changes ---
   const handleContentChange = useCallback((content: Block[]) => {
-    // DO NOT setEditorContent here - this was causing the loop
+    setEditorContent(content); // Ensure this line is uncommented
     if (isMounted.current) {
-      // setEditorContent(content); // REMOVED
       setIsDirty(true); // Mark editor as dirty
       setLastSyncError(null); // Clear error when user types
       // Trigger the debounce on content change, passing the new content and current title

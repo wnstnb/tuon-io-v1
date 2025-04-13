@@ -3,6 +3,7 @@
 import React, { memo } from 'react';
 import { type Block, type Selection } from "@blocknote/core";
 import dynamic from 'next/dynamic';
+import { isEqual } from 'lodash-es'; // Import isEqual
 
 // Dynamically import BlockNote components with SSR disabled
 const BlockNoteEditor = dynamic(
@@ -12,11 +13,12 @@ const BlockNoteEditor = dynamic(
         const { useCreateBlockNote, useBlockNoteEditor } = mod;
         const { BlockNoteView } = require('@blocknote/mantine');
         
-        // Ref to track programmatic changes
-        const isProgrammaticChange = React.useRef(false);
-        
+        // Ref to track previous artifact ID
+        const prevArtifactIdRef = React.useRef(props.artifactId);
+
         // Create editor with image upload support
         const editor = useCreateBlockNote({
+          // Set initial content once, effect handles updates on artifact change
           initialContent: props.initialContent && props.initialContent.length > 0 
             ? props.initialContent 
             : [{
@@ -30,7 +32,6 @@ const BlockNoteEditor = dynamic(
                 content: [],
                 children: []
               }],
-          // Add file upload handler for images
           uploadFile: async (file) => {
             // Check if file is an image
             if (!file.type.startsWith('image/')) {
@@ -230,36 +231,44 @@ const BlockNoteEditor = dynamic(
           return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
         }, [editor, props.onContentAccessRequest, props.currentContent]); // Dependencies for the handler
 
-        // Effect to update editor content when initialContent prop changes
+        // *** MODIFIED Effect: Update editor content ONLY when artifactId changes ***
         React.useEffect(() => {
-          // Check if initialContent is valid and different from current document
-          // Basic check to avoid unnecessary updates and potential loops
-          if (props.initialContent && editor.document !== props.initialContent) {
-            // console.log('Editor (Inner): Detected initialContent change, replacing blocks.');
-            isProgrammaticChange.current = true; // Set flag before programmatic change
-            editor.replaceBlocks(editor.document, props.initialContent);
-          }
-        // Depend on initialContent and the editor instance
-        }, [props.initialContent, editor]);
+          // Check if artifactId has changed
+          if (props.artifactId !== prevArtifactIdRef.current) {
+             console.log(`Editor (Inner): Artifact changed from ${prevArtifactIdRef.current} to ${props.artifactId}. Replacing content.`);
+             const newContent = props.initialContent && props.initialContent.length > 0 
+                ? props.initialContent 
+                : [{
+                    id: "default", type: "paragraph", props: { textColor: "default", backgroundColor: "default", textAlignment: "left" },
+                    content: [], children: []
+                  }];
 
-        // Regular onChange handler (already uses props correctly)
+             // Only replace if new content is actually different from current document
+             if (!isEqual(editor.document, newContent)) {
+                 editor.replaceBlocks(editor.document, newContent);
+             }
+             prevArtifactIdRef.current = props.artifactId; // Update ref AFTER processing
+          }
+          // No dependency on props.initialContent here, only artifactId and editor
+        }, [props.artifactId, editor, props.initialContent]); // Include initialContent to get latest if artifactId changes
+
+        // *** MODIFIED onChange handler: Removed isProgrammaticChange logic ***
         React.useEffect(() => {
           if (!props.onChange) return;
 
           const handleChange = () => {
-            // Keep the check for programmatic changes
-            if (isProgrammaticChange.current) {
-              isProgrammaticChange.current = false;
-              return;
-            }
-
-            // Call props.onChange directly
-            const blocks = editor.document;
-            props.onChange(blocks); // Report changes immediately
+            // Directly call props.onChange without checking any flag
+            props.onChange(editor.document); 
           };
 
           editor.onChange(handleChange);
-        }, [editor, props.onChange]);
+
+          // Cleanup (Note: BlockNote might not have a public API to remove onChange listeners)
+          // The key prop should handle component recreation on artifactId change.
+          return () => {
+            // Attempt cleanup if API becomes available or needed
+          };
+        }, [editor, props.onChange]); // Dependencies remain the same
 
         return (
           <BlockNoteView 
@@ -286,24 +295,38 @@ interface EditorProps {
   artifactId?: string;
   userId?: string;
   onContentAccessRequest?: (content: Block[]) => void;
+  // NEW: Need to pass down setAiStatus if used inside BlockNoteEditor dynamic import
+  setAiStatus?: (status: { isProcessing: boolean; message?: string }) => void; 
+  // NEW: Need to pass down currentContent if used inside BlockNoteEditor dynamic import
+  currentContent?: Block[]; 
 }
 
 // Rename the original function component
-const EditorComponent = ({ initialContent, onChange, artifactId, userId, onContentAccessRequest }: EditorProps) => {
+const EditorComponent = ({ 
+  initialContent, 
+  onChange, 
+  artifactId, 
+  userId, 
+  onContentAccessRequest,
+  // Ensure these are passed down if needed by the inner component's effects/handlers
+  setAiStatus, 
+  currentContent 
+}: EditorProps) => {
   // State to track content updates from AI (might be needed for keying/remounting)
   const [aiContent, setAiContent] = React.useState<Block[] | null>(null);
   // State to track current editor content (needed for onContentAccessRequest)
-  const [currentContent, setCurrentContent] = React.useState<Block[]>(initialContent || []);
+  // Let's rename internal state to avoid confusion with prop name
+  const [internalCurrentContent, setInternalCurrentContent] = React.useState<Block[]>(initialContent || []);
   // State to show status indicator for AI operations 
-  const [aiStatus, setAiStatus] = React.useState<{
+  const [internalAiStatus, setInternalAiStatus] = React.useState<{
     isProcessing: boolean;
     operation?: string;
     message?: string;
   }>({ isProcessing: false });
   
-  // Update currentContent when initialContent changes (e.g., loading from DB)
+  // Update internalCurrentContent when initialContent changes (e.g., loading from DB)
   React.useEffect(() => {
-    setCurrentContent(initialContent || []);
+    setInternalCurrentContent(initialContent || []);
   }, [initialContent]);
 
   // Debugging log
@@ -327,10 +350,10 @@ const EditorComponent = ({ initialContent, onChange, artifactId, userId, onConte
 
   return (
     <div className="editor-container">
-      {aiStatus.isProcessing && (
+      {internalAiStatus.isProcessing && (
         <div className="ai-status-indicator">
           <span className="ai-status-icon">🔄</span>
-          <span className="ai-status-message">{aiStatus.message}</span>
+          <span className="ai-status-message">{internalAiStatus.message}</span>
         </div>
       )}
       <ThemeAwareEditor 
@@ -341,15 +364,16 @@ const EditorComponent = ({ initialContent, onChange, artifactId, userId, onConte
         onChange={(blocks) => {
           // When editor changes, update currentContent and call parent onChange
           setAiContent(null); // User edited, clear AI content override
-          setCurrentContent(blocks);
+          setInternalCurrentContent(blocks); // Update internal state
           if (onChange) {
-            onChange(blocks);
+            onChange(blocks); // Call parent handler
           }
         }}
-        setAiStatus={setAiStatus} // Pass the setter down
-        currentContent={currentContent} // Pass current blocks down
+        // Pass down the state setter and current content for the inner component
+        setAiStatus={setInternalAiStatus} 
+        currentContent={internalCurrentContent} 
         onContentAccessRequest={onContentAccessRequest} // Pass down
-        EditorComponent={BlockNoteEditor}
+        EditorComponent={BlockNoteEditor} // Pass the dynamically loaded inner editor
         artifactId={artifactId}
         userId={userId}
       />
