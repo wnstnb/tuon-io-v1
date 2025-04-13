@@ -498,7 +498,15 @@ function EditorPageContent() {
 
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (idToLoad: string, user: User) => {
-    // Reset state for loading
+
+    // NEW Check: Prevent UI flash if loading the same ID (e.g., on tab focus)
+    if (idToLoad === currentArtifactId && isMounted.current) {
+      console.log(`loadArtifact called for the same ID (${idToLoad}) - likely a refresh trigger. Skipping UI flash.`);
+      // TODO: Optionally implement a silent background data refresh here if needed.
+      return; 
+    }
+
+    // Reset state for loading (only runs if idToLoad is different)
     if (isMounted.current) {
       setTitle('Loading...');
       setEditorContent([]);
@@ -629,7 +637,7 @@ function EditorPageContent() {
         setLastSyncError("Unexpected error loading artifact.");
       }
     }
-  }, [inferTitle, user]); // Keep inferTitle dependency here
+  }, [inferTitle, user, currentArtifactId]); // <-- ADDED currentArtifactId dependency
 
   // Listen for artifact selection events from FileExplorer
   useEffect(() => {
