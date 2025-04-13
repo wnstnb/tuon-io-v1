@@ -66,6 +66,7 @@ function EditorPageContent() {
   const [isSyncPending, setIsSyncPending] = useState<boolean>(false); // Local Storage state vs DB state
   const [isSyncing, setIsSyncing] = useState<boolean>(false); // DB sync operation in progress
   const [lastSyncError, setLastSyncError] = useState<string | null>(null); // Store last sync error message
+  const [userHasManuallySetTitle, setUserHasManuallySetTitle] = useState<boolean>(false); // NEW: Track manual title edits
 
   // Ref to track if component is mounted to avoid state updates after unmount
   const isMounted = useRef(true);
@@ -434,10 +435,11 @@ function EditorPageContent() {
       setTitle(newTitle);
       setIsDirty(true); // Mark editor as dirty
       setLastSyncError(null); // Clear error when user types
+      setUserHasManuallySetTitle(true); // NEW: Mark that user has manually set the title
       // Trigger the debounce on title change, passing current editorContent and new title
       debouncedLocalSave(editorContent, newTitle);
     }
-  }, [debouncedLocalSave, editorContent]); // Added editorContent dependency
+  }, [debouncedLocalSave, editorContent, userHasManuallySetTitle]); // Added editorContent dependency
 
   // --- UPDATED: Handle Content Changes ---
   const handleContentChange = useCallback((content: Block[]) => {
@@ -454,9 +456,10 @@ function EditorPageContent() {
   const inferTitle = useCallback(async (artifactId: string, contentForInference: Block[]) => {
     if (!user) return; // Need user context
 
-    if (title !== 'Untitled Artifact') {
-      // console.log('Skipping title inference: Title is already set to:', title);
-      return; 
+    // MODIFIED Check: Skip if user manually set the title OR if it's not the default placeholder
+    if (userHasManuallySetTitle || title !== 'Untitled Artifact') {
+       console.log('Skipping title inference: User manually set title or title is not default.', { userHasManuallySetTitle, currentTitle: title });
+       return;
     }
 
     const textContent = extractTextForInference(contentForInference);
@@ -491,7 +494,7 @@ function EditorPageContent() {
     } catch (error) {
       console.error('Error calling title inference API:', error);
     }
-  }, [user, title, handleTitleChange]); // Depends on handleTitleChange
+  }, [user, title, handleTitleChange, userHasManuallySetTitle]); // ADDED userHasManuallySetTitle dependency
 
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (idToLoad: string, user: User) => {
@@ -505,12 +508,14 @@ function EditorPageContent() {
       setLastSyncError(null);
       setIsArtifactPersisted(false); // Assume not persisted until confirmed
       setCurrentArtifactId(idToLoad); // Set the ID being loaded
+      setUserHasManuallySetTitle(false); // NEW: Reset manual title flag on load
     }
 
     let loadedTitle = 'Untitled Artifact';
     let loadedContent: Block[] = [];
     let finalSyncPending = false;
     let loadedDataTimestamp: Date | null = null;
+    let initialUserSetTitle = false; // NEW: Track if loaded title was user-set
 
     try {
       console.log(`Attempting to load artifact data for ID: ${idToLoad}`);
@@ -575,6 +580,11 @@ function EditorPageContent() {
         setIsArtifactPersisted(false); // Explicitly not persisted
       }
 
+      // NEW: Determine if the loaded title indicates a prior manual setting
+      if (loadedTitle !== 'Untitled Artifact') {
+        initialUserSetTitle = true;
+      }
+
       // 4. Update Component State with RAW content
       if (isMounted.current) {
         console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent.length}`);
@@ -582,6 +592,7 @@ function EditorPageContent() {
         setEditorContent(loadedContent); // <-- Set RAW content here
         setIsDirty(false);
         setIsSyncPending(finalSyncPending);
+        setUserHasManuallySetTitle(initialUserSetTitle); // NEW: Set based on loaded title
 
         // Save the loaded state back to local storage as the initial baseline
         if (loadedDataTimestamp) {
@@ -600,9 +611,10 @@ function EditorPageContent() {
         }
       }
 
-      // Post-load title inference (remains similar)
+      // Post-load title inference
       const isPlaceholderTitle = !loadedTitle || loadedTitle === 'Untitled Artifact';
-      if (isPlaceholderTitle && loadedContent.length > 0 && isMounted.current) {
+      // MODIFIED Check: Only infer if title is placeholder AND user hasn't manually set it yet
+      if (isPlaceholderTitle && !initialUserSetTitle && loadedContent.length > 0 && isMounted.current) {
          setTimeout(() => inferTitle(idToLoad, loadedContent), 500);
       }
 
@@ -617,7 +629,7 @@ function EditorPageContent() {
         setLastSyncError("Unexpected error loading artifact.");
       }
     }
-  }, [inferTitle, user]); // REMOVED resolveImagePathsToUrls from dependencies here
+  }, [inferTitle, user]); // Keep inferTitle dependency here
 
   // Listen for artifact selection events from FileExplorer
   useEffect(() => {
