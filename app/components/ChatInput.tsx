@@ -123,8 +123,16 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
   // Function to request editor content (now expects markdown and selected IDs)
   const requestEditorContext = () => {
     return new Promise<{ markdown?: string; selectedBlockIds?: string[] }>((resolve) => {
+      let timeoutId: NodeJS.Timeout | null = null; // Variable to hold the timeout ID
+
       // Set up a one-time listener for the response
       const handleContentResponse = (event: CustomEvent) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId); // Clear the timeout if the response is received
+          timeoutId = null;
+        }
+        window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener); // Remove listener here
+
         const { markdown, selectedBlockIds, error } = event.detail;
         if (error) {
           console.error('ChatInput: Error receiving editor context:', error);
@@ -133,7 +141,7 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
           console.log('ChatInput received editor context:', { markdown: markdown?.substring(0, 50) + '...', selectedBlockIds });
           resolve({ markdown, selectedBlockIds });
         }
-        window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
+        // Listener removal moved up
       };
 
       // Listen for the response
@@ -145,11 +153,12 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
       console.log('ChatInput dispatched requestContent event.');
 
       // Set a timeout in case we don't get a response
-      setTimeout(() => {
+      timeoutId = setTimeout(() => { // Store the timeout ID
+        timeoutId = null; // Clear the stored ID once timeout executes
         window.removeEventListener('editor:contentResponse', handleContentResponse as EventListener);
         console.warn('ChatInput: Timeout waiting for editor contentResponse.');
         resolve({}); // Resolve with empty object on timeout
-      }, 1500); // Slightly increased timeout
+      }, 5000); // Slightly increased timeout
     });
   };
 

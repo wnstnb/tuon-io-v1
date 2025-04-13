@@ -100,6 +100,26 @@ interface AIProviderProps {
 // Create unique ID
 const createId = () => Math.random().toString(36).substring(2, 9);
 
+// --- NEW: Utility Function to Strip Markdown Code Blocks ---
+const stripMarkdownCodeBlock = (text: string): string => {
+  if (typeof text !== 'string') return text; // Return as-is if not a string
+
+  const trimmedText = text.trim();
+  // Regex to match ``` optionally followed by a language identifier and newline,
+  // capturing the content inside, and ending with ```
+  const codeBlockRegex = /^```(?:\\w*\\n)?([\\s\\S]*?)\\n?```$/;
+  const match = trimmedText.match(codeBlockRegex);
+
+  if (match && match[1]) {
+    // Return the captured group (the content inside the code block)
+    return match[1].trim(); // Trim the inner content as well
+  }
+
+  // If no code block detected, return the original trimmed text
+  return trimmedText;
+};
+// --- END Utility Function ---
+
 // AI provider component
 export function AIProvider({ children }: AIProviderProps) {
   // State for API clients
@@ -717,12 +737,15 @@ export function AIProvider({ children }: AIProviderProps) {
       if (responseType === 'modification' && intentAnalysis.destination === 'EDITOR') {
         // Phase 1: Dispatch modification event
         console.log('AIContext: Dispatching editor:applyModification event.');
+        // --- MODIFIED: Strip potential code block ---
+        const cleanedMarkdown = stripMarkdownCodeBlock((creatorResponse as any).newMarkdown);
+        // --- END MODIFICATION ---
         const modificationEvent = new CustomEvent('editor:applyModification', {
           detail: {
             type: 'modification',
-            action: (creatorResponse as any).action, 
+            action: (creatorResponse as any).action,
             targetBlockIds: (creatorResponse as any).targetBlockIds,
-            newMarkdown: (creatorResponse as any).newMarkdown 
+            newMarkdown: cleanedMarkdown // Use the cleaned markdown
           }
         });
         window.dispatchEvent(modificationEvent);
