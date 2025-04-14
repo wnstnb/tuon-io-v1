@@ -8,7 +8,7 @@ import { FolderService, Folder } from '../lib/services/FolderService';
 import { ArtifactService, Artifact } from '../lib/services/ArtifactService';
 import { useRouter } from 'next/navigation'; // For navigation
 // Import icons (e.g., from react-icons)
-import { FaFolder, FaFolderOpen, FaFileAlt, FaPlus } from 'react-icons/fa';
+import { FaFolder, FaFolderOpen, FaFileAlt, FaPlus, FaList, FaTrash } from 'react-icons/fa';
 
 // Define the structure for nodes in the react-arborist tree
 interface TreeNodeData {
@@ -144,6 +144,8 @@ export function FileExplorer() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const treeRef = React.useRef<TreeApi<TreeNodeData>>(null); // Ref to access tree API
+    // State for tracking selection count for delete button enablement
+    const [selectionCount, setSelectionCount] = useState(0);
 
     // Fetch initial data
     useEffect(() => {
@@ -174,6 +176,11 @@ export function FileExplorer() {
         });
 
     }, [user]); // Re-fetch if user changes
+
+    // Callback to update selection count state when tree selection changes
+    const handleSelectionChange = useCallback((selectedNodes: NodeApi<TreeNodeData>[]) => {
+        setSelectionCount(selectedNodes.length);
+    }, []); // Empty dependency array - function itself doesn't depend on anything
 
     // --- Callback Handlers for react-arborist ---
 
@@ -225,6 +232,74 @@ export function FileExplorer() {
             console.error("Error creating folder:", err);
             setError(`Create folder failed: ${err.message || 'Please try again.'}`);
         }
+    }, [user, treeData]);
+
+    const handleDeleteSelected = useCallback(async () => {
+        if (!user || !treeRef.current) return;
+
+        const selectedNodes = treeRef.current.selectedNodes;
+        if (!selectedNodes || selectedNodes.length === 0) {
+            alert("No items selected to delete.");
+            return;
+        }
+
+        const nodeSummary = selectedNodes.length === 1
+            ? `"${selectedNodes[0].data.name}"`
+            : `${selectedNodes.length} items`;
+
+        if (!window.confirm(`Are you sure you want to delete ${nodeSummary}?`)) {
+            return;
+        }
+
+        setError(null); // Clear previous errors
+        // Maybe set a specific loading state for delete?
+
+        let successCount = 0;
+        const errors: string[] = [];
+        const originalTreeData = treeData ? JSON.parse(JSON.stringify(treeData)) : null; // For potential rollback
+
+        console.log(`FileExplorer: Deleting ${selectedNodes.length} items.`);
+
+        // Process deletions sequentially to potentially avoid race conditions
+        // or hitting DB limits, and handle folder deletion errors correctly.
+        for (const node of selectedNodes) {
+            try {
+                if (node.data.type === 'artifact') {
+                    await ArtifactService.deleteArtifact(node.data.originalId);
+                    console.log(`Deleted artifact: ${node.data.originalId}`);
+                } else if (node.data.type === 'folder') {
+                    // FolderService.deleteFolder throws if not empty
+                    await FolderService.deleteFolder(node.data.originalId, user.id);
+                    console.log(`Deleted folder: ${node.data.originalId}`);
+                }
+                successCount++;
+            } catch (err: any) {
+                console.error(`Error deleting ${node.data.type} ${node.data.originalId}:`, err);
+                errors.push(`Failed to delete ${node.data.type} "${node.data.name}": ${err.message}`);
+                // Optional: Stop on first error?
+                // break;
+            }
+        }
+
+        if (errors.length > 0) {
+            setError(`Deletion completed with errors: \n - ${errors.join('\n - ')}`);
+        }
+
+        // Refetch data to update the tree after deletion
+        // A more optimized approach would remove nodes locally if successful.
+        try {
+            const [folders, artifacts] = await Promise.all([
+                FolderService.getUserFolders(user.id),
+                ArtifactService.getUserArtifacts(user.id)
+            ]);
+            setTreeData(buildTreeData(folders, artifacts));
+        } catch (fetchErr: any) {
+            console.error("Error refetching data after delete:", fetchErr);
+            setError((prev) => (prev ? prev + "\n" : "") + "Failed to refresh file list after deletion.");
+            // Rollback UI if refetch fails?
+            if (originalTreeData && errors.length > 0) setTreeData(originalTreeData);
+        }
+
     }, [user, treeData]);
 
     const handleActivate = useCallback((node: NodeApi<TreeNodeData>) => {
@@ -315,15 +390,33 @@ export function FileExplorer() {
 
     return (
         <div className="file-explorer-container h-full w-full overflow-auto text-sm bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col">
-            {/* --- Add Create Folder Button --- */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700">
+            {/* --- Action Button Row --- */}
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2">
                 <button
+                    title="New Folder"
                     onClick={handleCreateFolder}
-                    className="flex items-center space-x-1 px-2 py-1 rounded text-xs bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50"
-                    disabled={!user || loading} // Disable if not logged in or loading
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                    disabled={!user || loading}
                 >
-                    <FaPlus size={10} />
-                    <span>New Folder</span>
+                    <FaPlus size={14} />
+                </button>
+                {/* This button currently doesn't toggle a mode, but serves as a placeholder/visual cue */}
+                <button
+                    title="Multi-select (use Shift/Ctrl/Meta + Click)"
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                    disabled={!user || loading}
+                     // Add active styling if implementing a strict mode toggle later
+                    // onClick={toggleMultiSelectMode} // Add handler if implementing strict mode
+                >
+                    <FaList size={14} />
+                </button>
+                <button
+                    title="Delete Selected"
+                    onClick={handleDeleteSelected}
+                    className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-gray-600"
+                    disabled={!user || loading || selectionCount === 0} // Use state for disable check
+                >
+                    <FaTrash size={14} />
                 </button>
             </div>
             {/* --- Tree Component --- */}
@@ -331,19 +424,19 @@ export function FileExplorer() {
                 <Tree<TreeNodeData>
                     ref={treeRef}
                     data={treeData ?? []}
-                    indent={16} // Indentation per level
-                    rowHeight={28} // Height of each row
-                    openByDefault={false} // Start with folders closed
-                    disableDrag={false} // Enable drag
-                    disableDrop={false} // Enable drop
+                    indent={16}
+                    rowHeight={28}
+                    openByDefault={false}
+                    disableDrag={false}
+                    disableDrop={false}
                     paddingTop={10}
                     paddingBottom={10}
                     onActivate={handleActivate}
                     onMove={handleMove}
                     onRename={handleRename}
-                    // onDelete={handleDelete} // Add delete handler if needed
+                    onSelect={handleSelectionChange} // Update selection count state
+                    // onDelete={handleDelete} // Can use Tree's internal delete or our custom one
                 >
-                    {/* Pass the custom Node renderer directly */}
                     {Node}
                 </Tree>
             </div>
