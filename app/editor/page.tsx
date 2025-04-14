@@ -737,6 +737,9 @@ function EditorPageContent() {
       let serverError = false;
       try {
         serverArtifact = await ArtifactService.getArtifact(idToLoad);
+        // --- DEBUG LOG: Log raw server artifact data ---
+        console.log(`[DEBUG loadArtifact] Raw server artifact data for ${idToLoad}:`, JSON.stringify(serverArtifact));
+        // --- END DEBUG LOG ---
         if (serverArtifact && isMounted.current) {
           setIsArtifactPersisted(true); // Mark as persisted if found on server
         }
@@ -750,6 +753,9 @@ function EditorPageContent() {
       let localData: LocalArtifactData | null = null;
       try {
         const localDataString = localStorage.getItem(`artifact-data-${idToLoad}`);
+        // --- DEBUG LOG: Log raw local storage data ---
+        console.log(`[DEBUG loadArtifact] Raw localStorage data string for ${idToLoad}:`, localDataString);
+        // --- END DEBUG LOG ---
         if (localDataString) localData = JSON.parse(localDataString);
       } catch (e) {
         console.warn("Failed to parse local data for artifact:", e);
@@ -760,6 +766,9 @@ function EditorPageContent() {
       if (localUpdate && (!serverUpdate || localUpdate > serverUpdate)) {
         // Local is newer or server failed/doesn't exist
         console.log('Loading newer data from local storage.');
+        // --- DEBUG LOG: Log local data before assignment ---
+        console.log(`[DEBUG loadArtifact] Using LOCAL storage data: title='${localData!.title}', content block count=${localData!.content?.length ?? 0}`);
+        // --- END DEBUG LOG ---
         loadedContent = localData!.content;
         loadedTitle = localData!.title;
         loadedDataTimestamp = localUpdate;
@@ -771,6 +780,9 @@ function EditorPageContent() {
       } else if (serverArtifact) {
         // Server is newer or same age, or local doesn't exist
         console.log('Loading data from server.');
+        // --- DEBUG LOG: Log server data before assignment ---
+        console.log(`[DEBUG loadArtifact] Using SERVER data: title='${serverArtifact.title}', content block count=${serverArtifact.content?.length ?? 0}`);
+        // --- END DEBUG LOG ---
         loadedContent = serverArtifact.content;
         loadedTitle = serverArtifact.title;
         loadedDataTimestamp = serverUpdate;
@@ -780,12 +792,18 @@ function EditorPageContent() {
       } else if (serverError) {
         // Server error and no local data
         console.error('Failed to load artifact from server and no local backup found.');
+        // --- DEBUG LOG: Log server error path ---
+        console.log(`[DEBUG loadArtifact] Using ERROR path (server error, no local): title='Loading Error', content block count=0`);
+        // --- END DEBUG LOG ---
         loadedTitle = 'Loading Error';
         loadedContent = [];
         finalSyncPending = false; // Cannot sync if nothing loaded
       } else {
         // Neither server nor local found (likely a brand new artifact ID)
         console.log(`Artifact ${idToLoad} not found. Starting fresh.`);
+        // --- DEBUG LOG: Log not found path ---
+        console.log(`[DEBUG loadArtifact] Using NOT FOUND path (new artifact): title='Untitled Artifact', content block count=0`);
+        // --- END DEBUG LOG ---
         loadedTitle = 'Untitled Artifact';
         loadedContent = [];
         finalSyncPending = false; // New artifact, nothing to sync initially
@@ -797,11 +815,22 @@ function EditorPageContent() {
         initialUserSetTitle = true;
       }
 
+      // --- DEBUG LOG: Log loadedContent before state update ---
+      console.log(`[DEBUG loadArtifact] Content BEFORE setEditorContent: Block count=${loadedContent?.length ?? 0}`, JSON.stringify(loadedContent?.slice(0, 1))); // Log first block
+      // --- END DEBUG LOG ---
+
       // 4. Update Component State with RAW content
       if (isMounted.current) {
         console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent?.length ?? 0}`); // Log count
         setTitle(loadedTitle);
         setEditorContent(loadedContent); // <-- Set RAW content here
+
+        // --- DEBUG LOG: Log editorContent state immediately AFTER setting ---
+        // Note: This might show the previous state due to async nature of setState.
+        // Check the browser dev tools console for the most accurate value after render.
+        console.log(`[DEBUG loadArtifact] Content AFTER setEditorContent call (might be previous state): Block count=${editorContent?.length ?? 0}`);
+        // --- END DEBUG LOG ---
+
         setIsDirty(false);
         setIsSyncPending(finalSyncPending);
         setUserHasManuallySetTitle(initialUserSetTitle); // NEW: Set based on loaded title

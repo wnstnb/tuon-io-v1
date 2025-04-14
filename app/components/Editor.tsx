@@ -15,6 +15,9 @@ const BlockNoteEditor = dynamic(
         
         // Ref to track previous artifact ID
         const prevArtifactIdRef = React.useRef(props.artifactId);
+        // --- NEW: Ref to track programmatic changes ---
+        const isProgrammaticChangeRef = React.useRef(false);
+        // --- END NEW ---
 
         // Create editor with image upload support
         const editor = useCreateBlockNote({
@@ -99,6 +102,29 @@ const BlockNoteEditor = dynamic(
           }
         }, [editor, props.onEditorReady]);
         // --- END: Call onEditorReady --- //
+
+        // --- NEW: Explicitly update editor content on initialContent change ---
+        React.useEffect(() => {
+          if (editor && props.initialContent) {
+            // --- DEBUG LOG: Check content before isEqual ---
+            console.log(`[DEBUG Editor Effect] Artifact: ${props.artifactId}. Comparing props.initialContent (Blocks: ${props.initialContent?.length}) vs editor.document (Blocks: ${editor.document?.length}).`);
+            // console.log('[DEBUG Editor Effect] props.initialContent:', JSON.stringify(props.initialContent?.slice(0,1)));
+            // console.log('[DEBUG Editor Effect] editor.document:', JSON.stringify(editor.document?.slice(0,1)));
+            // --- END DEBUG LOG ---
+
+            // Check if the incoming content is different from the current editor document
+            // Use isEqual for deep comparison of block arrays
+            if (!isEqual(props.initialContent, editor.document)) {
+              console.log(`Editor: Detected change in initialContent for artifact ${props.artifactId}. Replacing blocks.`);
+              // --- NEW: Set flag before programmatic change ---
+              isProgrammaticChangeRef.current = true;
+              // --- END NEW ---
+              editor.replaceBlocks(editor.document, props.initialContent);
+            }
+          }
+          // Dependency: Run when editor instance exists or initialContent prop changes.
+        }, [editor, props.initialContent, props.artifactId]); 
+        // --- END: Explicit update effect ---
 
         // Handle editor:setContent
         React.useEffect(() => {
@@ -243,12 +269,24 @@ const BlockNoteEditor = dynamic(
           return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
         }, [editor, props.onContentAccessRequest, props.currentContent]); // Dependencies for the handler
 
-        // *** MODIFIED onChange handler: Removed isProgrammaticChange logic ***
+        // *** MODIFIED onChange handler: Check programmatic change flag ***
         React.useEffect(() => {
           if (!props.onChange) return;
 
           const handleChange = () => {
-            // Directly call props.onChange without checking any flag
+            // --- NEW: Check programmatic change flag ---
+            if (isProgrammaticChangeRef.current) {
+              console.log("Editor onChange: Ignored programmatic change.");
+              // Reset the flag AFTER the current event stack clears
+              setTimeout(() => {
+                isProgrammaticChangeRef.current = false;
+              }, 0);
+              return; // Do not call props.onChange
+            }
+            // --- END NEW ---
+            
+            // If it's a user change, proceed as before
+            console.log("Editor onChange: Processing user change.");
             props.onChange(editor.document); 
           };
 
@@ -352,8 +390,6 @@ const EditorComponent = ({
         </div>
       )}
       <ThemeAwareEditor 
-        // Key logic remains important 
-        key={`editor-${artifactId}`}
         initialContent={safeInitialContent}
         // Pass down necessary state and functions
         onChange={(blocks) => {
