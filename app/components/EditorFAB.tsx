@@ -37,7 +37,7 @@ export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABPro
       console.log(`EditorFAB: Generated new artifact ID: ${newArtifactId}`);
 
       // Call AIContext to create linked conversation AND artifact
-      await createNewConversation(undefined, newArtifactId);
+      await createNewConversation(undefined, newArtifactId, true);
     } catch (error) {
       console.error('Error initiating new artifact/conversation creation:', error);
       // Error handling might be partially done within createNewConversation now

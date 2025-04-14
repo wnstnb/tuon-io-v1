@@ -85,7 +85,11 @@ interface AIContextType {
   conversationHistory: Conversation[];
   searchHistory: SearchHistoryItem[];
   setSearchHistory: React.Dispatch<React.SetStateAction<SearchHistoryItem[]>>;
-  createNewConversation: (model?: AIModelType, artifactIdToLink?: string) => void;
+  createNewConversation: (
+    model?: AIModelType, 
+    artifactIdToLink?: string, 
+    forceNavigation?: boolean
+  ) => void;
   sendMessage: (content: string, imageDataUrl?: string | null, editorContext?: EditorContext, searchOptions?: SearchOptions) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
@@ -451,8 +455,12 @@ export function AIProvider({ children }: AIProviderProps) {
   // --- END Helper ---
 
   // Create a new conversation
-  const createNewConversation = async (model?: AIModelType, artifactIdToLink?: string) => {
-    console.log(`AIContext: createNewConversation called. Linking to artifact: ${artifactIdToLink}`); // Log entry
+  const createNewConversation = async (
+    model?: AIModelType, 
+    artifactIdToLink?: string, 
+    forceNavigation: boolean = false
+  ) => {
+    console.log(`AIContext: createNewConversation called. Linking to artifact: ${artifactIdToLink}, Force Navigation: ${forceNavigation}`); // Log entry + new flag
     const newModel = model || currentModel;
     let finalArtifactId = artifactIdToLink;
     let artifactJustCreated = false;
@@ -544,11 +552,11 @@ export function AIProvider({ children }: AIProviderProps) {
 
       console.log(`Conversation (ID: ${newConversationId}) saved to DB and linked to Artifact (ID: ${finalArtifactId})`);
 
-      // If we just created the artifact, navigate to it ONLY if necessary
-      if (artifactJustCreated && finalArtifactId) {
+      // If we just created the artifact OR navigation is forced, navigate to it ONLY if necessary
+      if ((artifactJustCreated || forceNavigation) && finalArtifactId) {
         const currentUrlArtifactId = new URLSearchParams(window.location.search).get('artifactId');
         if (finalArtifactId !== currentUrlArtifactId) {
-            console.log(`Navigating to newly created artifact: ${finalArtifactId}`);
+            console.log(`Navigating to artifact: ${finalArtifactId}. Reason: ${forceNavigation ? 'Forced by caller' : 'Artifact just created'}`);
             router.push(`/editor?artifactId=${finalArtifactId}`);
         } else {
              console.log(`Already on the correct artifact URL (${finalArtifactId}), skipping navigation.`);
