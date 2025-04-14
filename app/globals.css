@@ -712,6 +712,8 @@ h1 {
   display: flex;
   flex-direction: column;
   height: 100%;
+  flex-grow: 1;
+  min-height: 0;
 }
 
 .chat-header {
@@ -721,6 +723,7 @@ h1 {
   padding: 10px;
   border-bottom: 1px solid var(--border-color);
   gap: 10px;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .header-button-container {
@@ -729,6 +732,7 @@ h1 {
   display: flex;
 }
 
+/* Chat Messages */
 .chat-messages {
   flex: 1;
   overflow-y: auto;
@@ -768,6 +772,7 @@ h1 {
   background-color: var(--bg-color);
   border-top: 1px solid var(--border-color);
   position: relative;
+  flex-shrink: 0; /* Prevent shrinking when in flex column */
 }
 
 /* Search mode indicator */
@@ -2613,4 +2618,50 @@ html.dark .ai-status-indicator {
 .bn-block {
   margin-left: 0;
   margin-right: 0;
+}
+
+/* NEW: Styles for the pinned chat input */
+.pinned-chat-input-container {
+  position: fixed;
+  bottom: 0;
+  left: 0; /* Adjust based on main layout */
+  right: 0; /* Adjust based on main layout */
+  width: 80%; /* Match app-container max-width */
+  margin: 0 auto; /* Center it like app-container */
+  z-index: 100; /* Ensure it's above editor content */
+  background-color: var(--bg-color); /* Give it a background */
+  border-top: 1px solid var(--border-color);
+  padding: 0.75rem; /* Match original padding */
+  box-shadow: var(--shadow-lg); /* Optional: Add shadow for separation */
+}
+
+/* Ensure the pinned input uses the existing internal layout */
+.pinned-chat-input-container .chat-input-form {
+  width: 100%;
+}
+
+/* Adjustments for when the input is pinned */
+.pinned-chat-input-container .chat-textarea {
+  /* Maybe slightly less max height? */
+}
+
+/* Adjust main content padding when input is pinned */
+.main-content-padded-bottom {
+  padding-bottom: 100px; /* Adjust based on pinned input height */
+}
+
+/* Hide the original chat input wrapper when the panel is collapsed */
+[data-panel-id="right-panel"][data-panel-collapsed="true"] .chat-input-wrapper {
+  display: none;
+}
+
+/* Styling for the chat input container itself */
+.chat-input-container {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem;
+  background-color: var(--bg-color);
+  border-top: 1px solid var(--border-color);
+  position: relative;
+  flex-shrink: 0; /* Prevent shrinking when in flex column */
 } 

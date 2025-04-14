@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import { PanelGroup, Panel, PanelResizeHandle, ImperativePanelGroupHandle } from 'react-resizable-panels';
 import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -14,8 +14,9 @@ import TitleBar from '../components/TitleBar';
 import { FileExplorer } from '../components/FileExplorer';
 import RightPane from '../components/RightPane';
 import GlobalSearch from '../components/GlobalSearch';
+import ChatInput from '../components/ChatInput';
 import { type Block, type PartialBlock, BlockNoteEditor } from "@blocknote/core";
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
 import { User } from '@supabase/supabase-js';
 import { ArtifactService } from '../lib/services/ArtifactService';
@@ -85,6 +86,9 @@ function EditorPageContent() {
   const [pendingSyncArtifactId, setPendingSyncArtifactId] = useState<string | null>(null); // ID waiting for DB sync
   const [lastSuccessfulSyncTime, setLastSuccessfulSyncTime] = useState<Date | null>(null); // NEW: Track last successful sync time
 
+  // Ref for PanelGroup imperative API
+  const panelGroupRef = useRef<ImperativePanelGroupHandle>(null);
+
   // --- NEW: Calculate SyncStatus based on state --- //
   const getSaveStatus = useCallback((): SyncStatus => {
     if (lastSyncError) return 'error';
@@ -115,41 +119,34 @@ function EditorPageContent() {
 
   // Basic UI interaction callbacks
   const toggleRightPanel = useCallback(() => {
-    if (isRightPanelAnimating) return;
-    
+    const panelGroup = panelGroupRef.current;
+    if (!panelGroup) return;
+
     if (showRightPanel) {
-      // Collapsing right panel
-      setIsRightPanelAnimating(true);
-      const rightPanel = document.getElementById('right-panel');
-      if (rightPanel) {
-        rightPanel.style.animation = 'slideOutRight 0.3s ease forwards';
-        setTimeout(() => {
-          setShowRightPanel(false);
-          setIsRightPanelAnimating(false);
-        }, 300);
-      } else {
-        setShowRightPanel(false);
-        setIsRightPanelAnimating(false);
-      }
+      // Collapse
+      panelGroup.setLayout([100, 0]);
     } else {
-      // Expanding right panel
-      setShowRightPanel(true);
-      setIsRightPanelAnimating(true);
-      setTimeout(() => {
-        setIsRightPanelAnimating(false);
-      }, 300);
+      // Expand - use the stored rightPanelSize
+      panelGroup.setLayout([100 - rightPanelSize, rightPanelSize]);
     }
-  }, [showRightPanel, isRightPanelAnimating]);
+    // Update state AFTER calling setLayout
+    setShowRightPanel(prev => !prev);
+  }, [showRightPanel, rightPanelSize]);
 
   const handlePanelResize = useCallback((sizes: number[]) => {
-    if (sizes.length === 2 && showRightPanel) {
+    // Only update the stored size if the right panel is actually visible and being resized
+    // This prevents overwriting the desired size when it's collapsed (size[1] would be 0)
+    if (sizes.length === 2 && showRightPanel && sizes[1] > 0) { 
+       // Store the size percentage when user drags
        if (Math.abs(sizes[1] - rightPanelSize) > 0.5) {
            setRightPanelSize(sizes[1]);
-           if (process.env.NODE_ENV === 'development') console.log('Right panel resized to:', sizes[1]);
+           if (process.env.NODE_ENV === 'development') console.log('Right panel size stored:', sizes[1]);
        }
-    } else if (sizes.length > 0) {
-        // console.log('Content panel size:', sizes[0]); // Optional log
-    }
+    } 
+    // No need to log content panel size unless debugging
+    // else if (sizes.length > 0) {
+    //     console.log('Content panel size:', sizes[0]);
+    // }
   }, [rightPanelSize, showRightPanel]);
 
   // Helper function to extract text content for title inference
@@ -669,7 +666,8 @@ function EditorPageContent() {
   }, [user, title, handleTitleChange, userHasManuallySetTitle]);
 
   // Load an artifact from Supabase
-  const loadArtifact = useCallback(async (idToLoad: string, user: User) => {
+  // Explicitly type the function signature
+  const loadArtifact: (idToLoad: string, user: User) => Promise<void> = useCallback(async (idToLoad, user) => {
 
     // NEW Check: Prevent UI flash if loading the same ID (e.g., on tab focus)
     if (idToLoad === currentArtifactId && isMounted.current) {
@@ -1185,8 +1183,9 @@ function EditorPageContent() {
         </Box>
       </Drawer>
 
-      <div className="content-area">
+      <div className={`content-area ${!showRightPanel ? 'main-content-padded-bottom' : ''}`}>
         <PanelGroup 
+          ref={panelGroupRef}
           autoSaveId="tuon-layout-main"
           direction="horizontal"
           onLayout={handlePanelResize}
@@ -1224,24 +1223,55 @@ function EditorPageContent() {
           
           <PanelResizeHandle 
             id="right-resize-handle" 
-            className="resize-handle"
+            className="resize-handle relative"
           >
             <div className="resize-line"></div>
+            <IconButton
+              onClick={toggleRightPanel}
+              size="small"
+              className="toggle-button toggle-button-right"
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '-18px',
+                transform: 'translateY(-50%)',
+                backgroundColor: 'var(--muted)',
+                color: 'var(--muted-foreground)',
+                border: '1px solid var(--border)',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                boxShadow: 'var(--shadow-sm)',
+                '&:hover': {
+                  backgroundColor: 'var(--primary)',
+                  color: 'var(--primary-foreground)',
+                },
+                zIndex: 10
+              }}
+              title={showRightPanel ? "Collapse Right Pane" : "Expand Right Pane"}
+            >
+              {showRightPanel ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </IconButton>
           </PanelResizeHandle>
           <Panel 
             id="right-panel" 
-            defaultSize={showRightPanel ? rightPanelSize : 0}
+            defaultSize={rightPanelSize}
             minSize={0}
             maxSize={40}
             order={2}
-            className="animated-panel right-panel"
-            collapsible={true}
-            onCollapse={() => setShowRightPanel(false)}
-            onExpand={() => setShowRightPanel(true)}   
           >
             <RightPane />
           </Panel>
         </PanelGroup>
+
+        {/* Conditionally render the Pinned Chat Input */}
+        {!showRightPanel && (
+          <div className="pinned-chat-input-container">
+            {/* Render ChatInput directly here when panel is collapsed */}
+            <ChatInput />
+          </div>
+        )}
+
       </div>
     </main>
   );

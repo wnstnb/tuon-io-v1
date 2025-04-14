@@ -34,6 +34,7 @@ export default function ChatInterface() {
         </div>
       </div>
       
+      {/* Chat messages are always rendered now (if data exists) */}
       <div className="chat-messages">
         {/* Display loading indicator specifically when messages are being loaded */}
         {isLoading && (!currentConversation || !currentConversation.messages) && (
@@ -71,8 +72,10 @@ export default function ChatInterface() {
         )}
       </div>
       
+      {/* Chat Input is now conditionally rendered/styled by parent */}
+      {/* Keep wrapper for potential future features within chat interface */}
       <div className="chat-input-wrapper">
-        <ChatInput />
+        {/* <ChatInput /> Rendered by parent */}
       </div>
     </div>
   );
