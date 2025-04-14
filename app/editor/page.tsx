@@ -106,7 +106,7 @@ function EditorPageContent() {
   // --- Force Sync Function --- //
   const forceSync = useCallback(() => {
     if (!currentArtifactId) return;
-    console.log(`Manual sync triggered for artifact: ${currentArtifactId}.`);
+    if (process.env.NODE_ENV === 'development') console.log(`Manual sync triggered for artifact: ${currentArtifactId}.`);
     // Directly call the latest sync logic, passing the current ID
     latestSyncFn.current(currentArtifactId);
   }, [currentArtifactId]);
@@ -171,14 +171,14 @@ function EditorPageContent() {
       // Only update if the size is different to avoid unnecessary re-renders
       if (Math.abs(sizes[0] - leftPanelSize) > 0.5) {
         setLeftPanelSize(sizes[0]);
-        console.log('Left panel resized to:', sizes[0]);
+        if (process.env.NODE_ENV === 'development') console.log('Left panel resized to:', sizes[0]);
       }
       
       // If right panel is visible, update its size
       if (showRightPanel && sizes.length > 2) {
         if (Math.abs(sizes[2] - rightPanelSize) > 0.5) {
           setRightPanelSize(sizes[2]);
-          console.log('Right panel resized to:', sizes[2]);
+          if (process.env.NODE_ENV === 'development') console.log('Right panel resized to:', sizes[2]);
         }
       }
     }
@@ -314,7 +314,7 @@ function EditorPageContent() {
     }
 
     // --- Log IDs for debugging --- //
-    console.log(`syncToDatabaseCore: Syncing with current artifact ID: ${currentArtifactId}, idToSync: ${idToSync}`);
+    if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Syncing with current artifact ID: ${currentArtifactId}, idToSync: ${idToSync}`);
     // --- END Log --- //
     
     // --- Only proceed if sync is actually pending for THIS artifact --- //
@@ -328,12 +328,12 @@ function EditorPageContent() {
     } catch { /* ignore parsing error here */ }
     
     if (!isSyncPending && !syncIdOverride) { // Don't skip if manually forced via override
-        console.log(`Sync skipped for ${idToSync}: isSyncPending is false.`);
+        if (process.env.NODE_ENV === 'development') console.log(`Sync skipped for ${idToSync}: isSyncPending is false.`);
         return;
     }
     // --- End Check --- //
 
-    console.log(`Attempting DB sync for artifact: ${idToSync}`);
+    if (process.env.NODE_ENV === 'development') console.log(`Attempting DB sync for artifact: ${idToSync}`);
     if (isMounted.current) {
       setIsSyncing(true);
       setLastSyncError(null); // Clear previous error on new attempt
@@ -368,18 +368,18 @@ function EditorPageContent() {
     }
 
     // --- ADD DIAGNOSTIC LOG (Simplified) --- //
-    console.log(`syncToDatabaseCore: About to sync artifact ${idToSync}.`, { // Use idToSync
+    if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: About to sync artifact ${idToSync}.`, { // Use idToSync
       title: dataToSync.title,
       contentBlockCount: dataToSync.content?.length ?? 0 // Log block count
     });
     // --- END DIAGNOSTIC LOG --- //
 
     // --- Log content read from storage --- //
-    console.log(`syncToDatabaseCore: Read from localStorage: title='${dataToSync.title}', blockCount=${dataToSync.content?.length ?? 0}`, { content: JSON.stringify(dataToSync.content?.slice(0, 1)) }); // Log first block
+    if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Read from localStorage: title='${dataToSync.title}', blockCount=${dataToSync.content?.length ?? 0}`, { content: JSON.stringify(dataToSync.content?.slice(0, 1)) }); // Log first block
 
     // --- ADD MORE DETAILED LOGGING ---
-    console.log(`syncToDatabaseCore: Current artifact persistence state: isArtifactPersisted=${isArtifactPersisted}`);
-    console.log(`syncToDatabaseCore: Current artifact ID vs sync ID: currentArtifactId=${currentArtifactId}, idToSync=${idToSync}`);
+    if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Current artifact persistence state: isArtifactPersisted=${isArtifactPersisted}`);
+    if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Current artifact ID vs sync ID: currentArtifactId=${currentArtifactId}, idToSync=${idToSync}`);
     // --- END ADDITIONAL LOGGING ---
 
     let success = false; // Initialize success flag
@@ -390,10 +390,10 @@ function EditorPageContent() {
       // TODO: Refine this persistence check - it's still a potential source of issues.
       // Maybe query DB explicitly if unsure?
       const assumePersisted = isArtifactPersisted || (idToSync !== currentArtifactId);
-      console.log(`syncToDatabaseCore: Assuming artifact ${idToSync} is persisted: ${assumePersisted}`);
+      if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Assuming artifact ${idToSync} is persisted: ${assumePersisted}`);
 
       if (!assumePersisted) {
-        console.log(`syncToDatabaseCore: Entering CREATE path for artifact ${idToSync}...`);
+        if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Entering CREATE path for artifact ${idToSync}...`);
         success = await ArtifactService.createArtifactWithId(
           idToSync,
           user.id,
@@ -411,7 +411,7 @@ function EditorPageContent() {
         }
       } else {
         // --- UPDATED: Wrap UPDATE logic in try/catch for ArtifactNotFoundError ---
-        console.log(`syncToDatabaseCore: Entering UPDATE path for artifact ${idToSync}...`);
+        if (process.env.NODE_ENV === 'development') console.log(`syncToDatabaseCore: Entering UPDATE path for artifact ${idToSync}...`);
         try {
           // Try updating title first (if combined later, adjust logic)
           // Note: updateArtifactTitle now throws ArtifactNotFoundError if it doesn't exist
@@ -463,7 +463,7 @@ function EditorPageContent() {
 
       // --- State updates based on final success/failure --- //
       if (success) {
-        console.log(`DB sync successful for ${idToSync}.`);
+        if (process.env.NODE_ENV === 'development') console.log(`DB sync successful for ${idToSync}.`);
         if (isMounted.current) {
           setIsSyncPending(false);
           setLastSyncError(null);
@@ -513,7 +513,7 @@ function EditorPageContent() {
   const throttledDbSync = useMemo(() =>
     throttle(() => {
         // ADDED: Log state *before* calling the sync function
-        console.log(`Throttled function executing. Checking conditions...`, {
+        if (process.env.NODE_ENV === 'development') console.log(`Throttled function executing. Checking conditions...`, {
           hasUser: !!user, // Access user state here
           pendingSyncArtifactId, // Access pending ID state here
           isSyncing, // Access syncing state here
@@ -528,7 +528,7 @@ function EditorPageContent() {
     return debounce((content: Block[], titleToSave: string) => {
       if (!isMounted.current) return;
       
-      console.log(`Saving to localStorage: artifact=${currentArtifactId}, title=${titleToSave}, blocks=${content.length}`);
+      if (process.env.NODE_ENV === 'development') console.log(`Saving to localStorage: artifact=${currentArtifactId}, title=${titleToSave}, blocks=${content.length}`);
       
       try {
         // Prepare the data object
@@ -553,7 +553,7 @@ function EditorPageContent() {
       } catch (e) {
         console.error('Error saving to localStorage:', e);
       }
-    }, 1000, { leading: false, trailing: true });
+    }, 5000, { leading: false, trailing: true }); // Increased delay to 5000ms
   }, [currentArtifactId]); // Add currentArtifactId as dependency
   
   // --- NEW: Trigger Sync via Effect when Pending ---
@@ -562,7 +562,7 @@ function EditorPageContent() {
     // trigger the throttled sync function **using the pending ID**
     // Update: syncToDatabaseCore now reads pendingSyncArtifactId, so just call throttle.
     if (isSyncPending && pendingSyncArtifactId && !isSyncing && isMounted.current) {
-      console.log(`useEffect triggering throttledDbSync for pending artifact ${pendingSyncArtifactId}`);
+      if (process.env.NODE_ENV === 'development') console.log(`useEffect triggering throttledDbSync for pending artifact ${pendingSyncArtifactId}`);
       // The throttled function calls latestSyncFn.current(), which will now use pendingSyncArtifactId
       throttledDbSync();
     }
@@ -590,12 +590,12 @@ function EditorPageContent() {
 
   // --- UPDATED: Handle Content Changes ---
   const handleContentChange = useCallback((content: Block[], sourceArtifactId?: string) => {
-    console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
+    if (process.env.NODE_ENV === 'development') console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
     
     // Check if content is coming from a different artifact (AI generation)
     if (sourceArtifactId && sourceArtifactId !== currentArtifactId) {
-      console.log(`[ARTIFACT ID MISMATCH] Content change includes source artifactId ${sourceArtifactId}, different from current ${currentArtifactId}`);
-      console.log('This is likely content from AI generation. Using the correct artifact ID to prevent orphaned artifacts.');
+      if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT ID MISMATCH] Content change includes source artifactId ${sourceArtifactId}, different from current ${currentArtifactId}`);
+      if (process.env.NODE_ENV === 'development') console.log('This is likely content from AI generation. Using the correct artifact ID to prevent orphaned artifacts.');
       
       // First, save the existing data for the current artifact (if any)
       try {
@@ -603,7 +603,7 @@ function EditorPageContent() {
         if (existingData) {
           // Save the data with a backup name in case we need to recover it
           localStorage.setItem(`artifact-data-${currentArtifactId}-backup`, existingData);
-          console.log(`Backed up data for current artifact ${currentArtifactId} before switching`);
+          if (process.env.NODE_ENV === 'development') console.log(`Backed up data for current artifact ${currentArtifactId} before switching`);
         }
       } catch (e) {
         console.error('Error backing up current artifact data:', e);
@@ -617,13 +617,13 @@ function EditorPageContent() {
       // This helps syncToDatabaseCore make the right decision about create vs update
       setIsArtifactPersisted(true);
       
-      console.log(`[ARTIFACT ID UPDATED] Current artifact ID has been updated to: ${sourceArtifactId}`);
+      if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT ID UPDATED] Current artifact ID has been updated to: ${sourceArtifactId}`);
 
       // Now clear the sync pending for the old artifact ID
       if (pendingSyncArtifactId !== sourceArtifactId) {
         // We're switching artifacts, so any pending sync for the old one should be cancelled
         setPendingSyncArtifactId(sourceArtifactId);
-        console.log(`Cleared pending sync for previous artifact ID, now tracking: ${sourceArtifactId}`);
+        if (process.env.NODE_ENV === 'development') console.log(`Cleared pending sync for previous artifact ID, now tracking: ${sourceArtifactId}`);
       }
       
       // Update the URL to match the new artifact ID
@@ -634,16 +634,16 @@ function EditorPageContent() {
         if (currentUrlArtifactId !== sourceArtifactId) {
           url.searchParams.set('artifactId', sourceArtifactId);
           window.history.replaceState({}, '', url.toString());
-          console.log(`Updated URL to reflect new artifact ID: ${sourceArtifactId}`);
+          if (process.env.NODE_ENV === 'development') console.log(`Updated URL to reflect new artifact ID: ${sourceArtifactId}`);
         }
       } catch (e) {
         console.error('Error updating URL with new artifact ID:', e);
       }
     } else {
       if (sourceArtifactId) {
-        console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
+        if (process.env.NODE_ENV === 'development') console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
       } else {
-        console.log(`Content change has no source artifactId (likely user edit)`);
+        if (process.env.NODE_ENV === 'development') console.log(`Content change has no source artifactId (likely user edit)`);
       }
     }
     
@@ -662,7 +662,7 @@ function EditorPageContent() {
 
     // MODIFIED Check: Skip if user manually set the title OR if it's not the default placeholder
     if (userHasManuallySetTitle || title !== 'Untitled Artifact') {
-       console.log('Skipping title inference: User manually set title or title is not default.', { userHasManuallySetTitle, currentTitle: title });
+       if (process.env.NODE_ENV === 'development') console.log('Skipping title inference: User manually set title or title is not default.', { userHasManuallySetTitle, currentTitle: title });
        return;
     }
 
@@ -705,7 +705,7 @@ function EditorPageContent() {
 
     // NEW Check: Prevent UI flash if loading the same ID (e.g., on tab focus)
     if (idToLoad === currentArtifactId && isMounted.current) {
-      console.log(`loadArtifact called for the same ID (${idToLoad}) - likely a refresh trigger. Skipping UI flash.`);
+      if (process.env.NODE_ENV === 'development') console.log(`loadArtifact called for the same ID (${idToLoad}) - likely a refresh trigger. Skipping UI flash.`);
       // TODO: Optionally implement a silent background data refresh here if needed.
       return; 
     }
@@ -730,16 +730,13 @@ function EditorPageContent() {
     let initialUserSetTitle = false; // NEW: Track if loaded title was user-set
 
     try {
-      console.log(`Attempting to load artifact data for ID: ${idToLoad}`);
+      if (process.env.NODE_ENV === 'development') console.log(`Attempting to load artifact data for ID: ${idToLoad}`);
 
       // 1. Fetch from server
       let serverArtifact = null;
       let serverError = false;
       try {
         serverArtifact = await ArtifactService.getArtifact(idToLoad);
-        // --- DEBUG LOG: Log raw server artifact data ---
-        console.log(`[DEBUG loadArtifact] Raw server artifact data for ${idToLoad}:`, JSON.stringify(serverArtifact));
-        // --- END DEBUG LOG ---
         if (serverArtifact && isMounted.current) {
           setIsArtifactPersisted(true); // Mark as persisted if found on server
         }
@@ -753,9 +750,6 @@ function EditorPageContent() {
       let localData: LocalArtifactData | null = null;
       try {
         const localDataString = localStorage.getItem(`artifact-data-${idToLoad}`);
-        // --- DEBUG LOG: Log raw local storage data ---
-        console.log(`[DEBUG loadArtifact] Raw localStorage data string for ${idToLoad}:`, localDataString);
-        // --- END DEBUG LOG ---
         if (localDataString) localData = JSON.parse(localDataString);
       } catch (e) {
         console.warn("Failed to parse local data for artifact:", e);
@@ -765,10 +759,7 @@ function EditorPageContent() {
       // 3. Decide what to load & Set Initial State
       if (localUpdate && (!serverUpdate || localUpdate > serverUpdate)) {
         // Local is newer or server failed/doesn't exist
-        console.log('Loading newer data from local storage.');
-        // --- DEBUG LOG: Log local data before assignment ---
-        console.log(`[DEBUG loadArtifact] Using LOCAL storage data: title='${localData!.title}', content block count=${localData!.content?.length ?? 0}`);
-        // --- END DEBUG LOG ---
+        if (process.env.NODE_ENV === 'development') console.log('Loading newer data from local storage.');
         loadedContent = localData!.content;
         loadedTitle = localData!.title;
         loadedDataTimestamp = localUpdate;
@@ -779,10 +770,7 @@ function EditorPageContent() {
         }
       } else if (serverArtifact) {
         // Server is newer or same age, or local doesn't exist
-        console.log('Loading data from server.');
-        // --- DEBUG LOG: Log server data before assignment ---
-        console.log(`[DEBUG loadArtifact] Using SERVER data: title='${serverArtifact.title}', content block count=${serverArtifact.content?.length ?? 0}`);
-        // --- END DEBUG LOG ---
+        if (process.env.NODE_ENV === 'development') console.log('Loading data from server.');
         loadedContent = serverArtifact.content;
         loadedTitle = serverArtifact.title;
         loadedDataTimestamp = serverUpdate;
@@ -792,18 +780,12 @@ function EditorPageContent() {
       } else if (serverError) {
         // Server error and no local data
         console.error('Failed to load artifact from server and no local backup found.');
-        // --- DEBUG LOG: Log server error path ---
-        console.log(`[DEBUG loadArtifact] Using ERROR path (server error, no local): title='Loading Error', content block count=0`);
-        // --- END DEBUG LOG ---
         loadedTitle = 'Loading Error';
         loadedContent = [];
         finalSyncPending = false; // Cannot sync if nothing loaded
       } else {
         // Neither server nor local found (likely a brand new artifact ID)
-        console.log(`Artifact ${idToLoad} not found. Starting fresh.`);
-        // --- DEBUG LOG: Log not found path ---
-        console.log(`[DEBUG loadArtifact] Using NOT FOUND path (new artifact): title='Untitled Artifact', content block count=0`);
-        // --- END DEBUG LOG ---
+        if (process.env.NODE_ENV === 'development') console.log(`Artifact ${idToLoad} not found. Starting fresh.`);
         loadedTitle = 'Untitled Artifact';
         loadedContent = [];
         finalSyncPending = false; // New artifact, nothing to sync initially
@@ -815,21 +797,11 @@ function EditorPageContent() {
         initialUserSetTitle = true;
       }
 
-      // --- DEBUG LOG: Log loadedContent before state update ---
-      console.log(`[DEBUG loadArtifact] Content BEFORE setEditorContent: Block count=${loadedContent?.length ?? 0}`, JSON.stringify(loadedContent?.slice(0, 1))); // Log first block
-      // --- END DEBUG LOG ---
-
       // 4. Update Component State with RAW content
       if (isMounted.current) {
-        console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent?.length ?? 0}`); // Log count
+        if (process.env.NODE_ENV === 'development') console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent?.length ?? 0}`); // Log count
         setTitle(loadedTitle);
         setEditorContent(loadedContent); // <-- Set RAW content here
-
-        // --- DEBUG LOG: Log editorContent state immediately AFTER setting ---
-        // Note: This might show the previous state due to async nature of setState.
-        // Check the browser dev tools console for the most accurate value after render.
-        console.log(`[DEBUG loadArtifact] Content AFTER setEditorContent call (might be previous state): Block count=${editorContent?.length ?? 0}`);
-        // --- END DEBUG LOG ---
 
         setIsDirty(false);
         setIsSyncPending(finalSyncPending);
@@ -844,7 +816,7 @@ function EditorPageContent() {
                updatedAt: loadedDataTimestamp.toISOString(),
              };
              localStorage.setItem(`artifact-data-${idToLoad}`, JSON.stringify(baselineData));
-             console.log('Initial baseline saved to local storage.');
+             if (process.env.NODE_ENV === 'development') console.log('Initial baseline saved to local storage.');
            } catch(e) { console.error("Failed to save initial baseline to local storage", e); }
         } else {
            // If nothing was loaded, clear local storage just in case
@@ -854,23 +826,23 @@ function EditorPageContent() {
 
       // --- NEW: Find or Create Linked Conversation --- //
       if (isMounted.current) {
-        console.log(`Attempting to find/create conversation linked to artifact ${idToLoad}`);
+        if (process.env.NODE_ENV === 'development') console.log(`Attempting to find/create conversation linked to artifact ${idToLoad}`);
         const existingConversation = findConversationByArtifactId(idToLoad);
 
         if (existingConversation) {
-          console.log(`Found existing conversation ${existingConversation.id}, selecting it.`);
+          if (process.env.NODE_ENV === 'development') console.log(`Found existing conversation ${existingConversation.id}, selecting it.`);
           // Only select if it's not already the current one
           if (currentConversation?.id !== existingConversation.id) {
             selectConversation(existingConversation.id);
           } else {
-            console.log(`Conversation ${existingConversation.id} is already selected.`);
+            if (process.env.NODE_ENV === 'development') console.log(`Conversation ${existingConversation.id} is already selected.`);
           }
         } else {
-          console.log(`No existing conversation found for artifact ${idToLoad}. Creating a new one.`);
+          if (process.env.NODE_ENV === 'development') console.log(`No existing conversation found for artifact ${idToLoad}. Creating a new one.`);
           // Pass the artifact ID to create a new, linked conversation
           // Model selection can be default or potentially based on user preferences later
           await createNewConversation(undefined, idToLoad);
-          console.log(`createNewConversation called for artifact ${idToLoad}.`);
+          if (process.env.NODE_ENV === 'development') console.log(`createNewConversation called for artifact ${idToLoad}.`);
         }
       }
       // --- END Conversation Linking --- //
@@ -900,10 +872,10 @@ function EditorPageContent() {
     const handleArtifactSelected = (event: CustomEvent) => {
       const { artifactId: selectedId } = event.detail;
       if (selectedId && user && selectedId !== currentArtifactId) {
-        console.log(`Loading artifact from event: ${selectedId}`);
+        if (process.env.NODE_ENV === 'development') console.log(`Loading artifact from event: ${selectedId}`);
 
         // Flush any pending local save for the OLD artifact FIRST
-        console.log(`Flushing potential pending save for ${currentArtifactId}...`);
+        if (process.env.NODE_ENV === 'development') console.log(`Flushing potential pending save for ${currentArtifactId}...`);
         debouncedLocalSave.flush(); // <-- Changed from cancel()
 
         // Now check if sync is pending (could have become true after flush)
@@ -930,10 +902,10 @@ function EditorPageContent() {
   // Load artifact if ID is provided in URL and different from current
   useEffect(() => {
     if (artifactIdParam && user && artifactIdParam !== currentArtifactId) {
-      console.log(`Loading artifact from URL: ${artifactIdParam}`);
+      if (process.env.NODE_ENV === 'development') console.log(`Loading artifact from URL: ${artifactIdParam}`);
 
       // Flush any pending local save for the OLD artifact FIRST
-      console.log(`Flushing potential pending save for ${currentArtifactId}...`);
+      if (process.env.NODE_ENV === 'development') console.log(`Flushing potential pending save for ${currentArtifactId}...`);
       debouncedLocalSave.flush(); // <-- Changed from cancel()
 
       // Now check if sync is pending (could have become true after flush)
@@ -983,7 +955,7 @@ function EditorPageContent() {
 
   // Define the handler function with the correct type using useCallback
   const handleContentRequest = useCallback(async (event: CustomEvent) => {
-    console.log('EditorPageContent received requestContent event.');
+    if (process.env.NODE_ENV === 'development') console.log('EditorPageContent received requestContent event.');
     if (!editorRef.current) {
       console.error('Editor ref not available to get markdown.');
       window.dispatchEvent(new CustomEvent('editor:contentResponse', {
@@ -999,7 +971,7 @@ function EditorPageContent() {
       // Get selected block IDs
       const selectedBlockIds = editorRef.current.getSelection()?.blocks.map(b => b.id) || [];
       
-      console.log('EditorPageContent dispatching contentResponse event.');
+      if (process.env.NODE_ENV === 'development') console.log('EditorPageContent dispatching contentResponse event.');
       window.dispatchEvent(new CustomEvent('editor:contentResponse', {
         detail: { markdown, selectedBlockIds }
       }));
@@ -1057,7 +1029,7 @@ function EditorPageContent() {
 
     // If unprocessed paths exist and we aren't already processing
     if (needsProcessing && !processingInProgress) {
-      console.log("useEffect: Detected unprocessed image paths. Starting resolution...");
+      if (process.env.NODE_ENV === 'development') console.log("useEffect: Detected unprocessed image paths. Starting resolution...");
       processingInProgress = true; // Set flag
 
       resolveImagePathsToUrls(editorContent) // Use the stable callback
@@ -1066,13 +1038,13 @@ function EditorPageContent() {
           if (isMounted.current) {
             // Only update if the content actually changed after processing
             if (JSON.stringify(processedContent) !== JSON.stringify(editorContent)) {
-               console.log("useEffect: Image paths resolved. Updating editor content.");
+               if (process.env.NODE_ENV === 'development') console.log("useEffect: Image paths resolved. Updating editor content.");
                setEditorContent(processedContent);
             } else {
-               console.log("useEffect: Processed content is identical to current. Skipping update.");
+               if (process.env.NODE_ENV === 'development') console.log("useEffect: Processed content is identical to current. Skipping update.");
             }
           } else {
-             console.log("useEffect: Component unmounted before image processing completed.");
+             if (process.env.NODE_ENV === 'development') console.log("useEffect: Component unmounted before image processing completed.");
           }
         })
         .catch(error => {
@@ -1092,12 +1064,12 @@ function EditorPageContent() {
   // Initialize: Load or setup new artifact
   useEffect(() => {
     if (artifactIdParam && user) {
-      console.log('Initial load based on URL artifactId');
+      if (process.env.NODE_ENV === 'development') console.log('Initial load based on URL artifactId');
       // Call loadArtifact here if needed
       loadArtifact(artifactIdParam, user);
     } else if (!artifactIdParam && user && currentArtifactId) {
       // Handle case where there's no artifactId in URL (new artifact)
-      console.log('Initial setup for new artifact with ID:', currentArtifactId);
+      if (process.env.NODE_ENV === 'development') console.log('Initial setup for new artifact with ID:', currentArtifactId);
       if (isMounted.current) {
         // Set initial state for a new artifact
         setTitle('Untitled Artifact');
@@ -1148,20 +1120,20 @@ function EditorPageContent() {
 
   // Log artifact ID updates when it changes
   useEffect(() => {
-    console.log(`[ARTIFACT TRACKING] Current artifact ID changed to: ${currentArtifactId}`);
-    console.log(`[ARTIFACT TRACKING] Artifact persistence state: ${isArtifactPersisted}`);
+    if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT TRACKING] Current artifact ID changed to: ${currentArtifactId}`);
+    if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT TRACKING] Artifact persistence state: ${isArtifactPersisted}`);
     
     // Check if there's any content in localStorage for this artifact
     try {
       const localData = localStorage.getItem(`artifact-data-${currentArtifactId}`);
       if (localData) {
         const parsed = JSON.parse(localData);
-        console.log(`[ARTIFACT TRACKING] Found localStorage data for ${currentArtifactId}:`, {
+        if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT TRACKING] Found localStorage data for ${currentArtifactId}:`, {
           title: parsed.title,
           contentLength: parsed.content.length
         });
       } else {
-        console.log(`[ARTIFACT TRACKING] No localStorage data found for ${currentArtifactId}`);
+        if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT TRACKING] No localStorage data found for ${currentArtifactId}`);
       }
     } catch (e) {
       console.error('Error checking localStorage for artifact:', e);
