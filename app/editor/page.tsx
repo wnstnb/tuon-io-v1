@@ -130,7 +130,7 @@ function EditorPageContent() {
       panelGroup.setLayout([100 - rightPanelSize, rightPanelSize]);
     }
     // Update state AFTER calling setLayout
-    setShowRightPanel(prev => !prev);
+    // setShowRightPanel(prev => !prev);
   }, [showRightPanel, rightPanelSize]);
 
   const handlePanelResize = useCallback((sizes: number[]) => {
@@ -1259,6 +1259,19 @@ function EditorPageContent() {
             minSize={0}
             maxSize={40}
             order={2}
+            collapsible={true}
+            onCollapse={() => {
+              if (showRightPanel) {
+                if (process.env.NODE_ENV === 'development') console.log('Right panel collapsed via drag/API');
+                setShowRightPanel(false);
+              }
+            }}
+            onExpand={() => {
+              if (!showRightPanel) {
+                if (process.env.NODE_ENV === 'development') console.log('Right panel expanded via drag/API');
+                setShowRightPanel(true);
+              }
+            }}
           >
             <RightPane />
           </Panel>

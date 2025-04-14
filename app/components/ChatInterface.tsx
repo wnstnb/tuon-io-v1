@@ -75,7 +75,8 @@ export default function ChatInterface() {
       {/* Chat Input is now conditionally rendered/styled by parent */}
       {/* Keep wrapper for potential future features within chat interface */}
       <div className="chat-input-wrapper">
-        {/* <ChatInput /> Rendered by parent */}
+        {/* Render ChatInput here, CSS will hide wrapper when panel is collapsed */}
+        <ChatInput /> 
       </div>
     </div>
   );
