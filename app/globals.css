@@ -231,6 +231,7 @@ h1 {
 
 .title-bar {
   max-width: 100%;
+  max-height: 48px;
   margin: 0;
   padding: 0.5rem 2rem;
   border-bottom: 1px solid var(--border-color);

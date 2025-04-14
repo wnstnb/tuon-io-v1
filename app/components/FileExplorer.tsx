@@ -119,15 +119,18 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
         >
             {/* Wrapper for content with padding and hover/selection background */} 
             <div
-                className={`flex-grow flex items-center space-x-1 min-w-0 px-2 py-1 rounded
-                            ${node.state.isSelected ? 'bg-gray-200 dark:bg-slate-700 font-medium' : 'hover:bg-gray-100 dark:hover:bg-slate-800'}`}
+                className={`flex-grow flex items-center space-x-1 min-w-0 px-2 py-1 rounded group
+                            ${node.state.isSelected ? 'bg-gray-200 dark:bg-slate-700 font-medium' : 'hover:bg-gray-100 dark:hover:bg-slate-800'} 
+                            font-jetbrains-mono pr-3 transition-colors duration-150 cursor-pointer
+                            ${node.data.type === 'artifact' ? 'hover:shadow-[inset_3px_0_0_0] hover:shadow-blue-400 dark:hover:shadow-blue-500' : ''}
+                            ${node.data.type === 'folder' ? 'hover:shadow-[inset_3px_0_0_0] hover:shadow-green-400 dark:hover:shadow-green-500' : ''}`}
             >
                 {/* Indentation spacer */}
                 <span style={{ width: `${node.level * 12}px` }} className="inline-block flex-shrink-0"></span>
 
                 {/* Folder Toggle Chevron */} 
                 <span
-                    className={`folder-toggle-icon flex-shrink-0 w-4 h-4 flex items-center justify-center ${!node.isInternal ? 'invisible' : 'cursor-pointer text-gray-500 dark:text-gray-400'}`}
+                    className={`folder-toggle-icon flex-shrink-0 w-4 h-4 flex items-center justify-center ${!node.isInternal ? 'invisible' : 'cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-150'}`}
                     onClick={(e) => {
                         e.stopPropagation(); // Prevent row onClick
                         if (node.isInternal) node.toggle();
@@ -137,7 +140,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
                 </span>
 
                 {/* Main Icon (Folder/File) */} 
-                <Icon className="icon flex-shrink-0 w-4 h-4 text-gray-600 dark:text-gray-400" />
+                <Icon className={`icon flex-shrink-0 w-4 h-4 text-gray-600 dark:text-gray-400 ${node.data.type === 'folder' ? 'group-hover:text-green-600 dark:group-hover:text-green-400' : 'group-hover:text-blue-600 dark:group-hover:text-blue-400'} transition-colors duration-150`} />
 
                 {/* Name/Input Area */} 
                 {node.isEditing ? (
@@ -151,12 +154,12 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
                             if (e.key === 'Escape') node.reset();
                         }}
                         autoFocus
-                        className="node-edit-input px-1 py-0 border border-blue-400 rounded-sm flex-grow bg-white dark:bg-gray-700 text-black dark:text-white text-sm"
+                        className="node-edit-input px-1 py-0 border border-blue-400 rounded-sm flex-grow bg-white dark:bg-gray-700 text-black dark:text-white text-sm font-jetbrains-mono"
                     />
                 ) : (
                     <span
                         onDoubleClick={(e) => { e.stopPropagation(); node.edit(); }}
-                        className="node-name truncate flex-grow min-w-0 text-sm cursor-default"
+                        className="node-name truncate flex-grow min-w-0 text-sm cursor-default hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150"
                     >
                         {node.data.name}
                     </span> // Edit on double click name
@@ -421,20 +424,20 @@ export function FileExplorer() {
     }
 
   return (
-        <div className="file-explorer-container h-full w-full overflow-auto text-sm bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col">
+        <div className="file-explorer-container h-full w-full overflow-auto text-sm bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col font-jetbrains-mono pt-2">
             {/* --- Action Button Row --- */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2">
+            <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2 px-4 pb-3">
           <button 
                     title="New Folder"
                     onClick={handleCreateFolder}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors duration-150"
                     disabled={!user || loading}
                 >
                     <CreateNewFolderIcon fontSize="small" />
           </button>
           <button
                     title="Multi-select (use Shift/Ctrl/Meta + Click)"
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors duration-150"
                     disabled={!user || loading}
                 >
                     <LibraryAddCheckIcon fontSize="small" />
@@ -442,14 +445,14 @@ export function FileExplorer() {
           <button 
                     title="Delete Selected"
             onClick={handleDeleteSelected}
-                    className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-gray-600"
+                    className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-gray-600 transition-colors duration-150"
                     disabled={!user || loading || selectionCount === 0}
                 >
                     <DeleteOutlineIcon fontSize="small" />
                 </button>
             </div>
             {/* --- Tree Component --- */}
-            <div className="flex-grow overflow-auto"> { /* Wrapper div for the tree */}
+            <div className="flex-grow overflow-auto px-4"> { /* Increased horizontal padding */}
                 <Tree<TreeNodeData>
                     ref={treeRef}
                     data={treeData ?? []}
@@ -458,7 +461,7 @@ export function FileExplorer() {
                     openByDefault={false}
                     disableDrag={false}
                     disableDrop={false}
-                    paddingTop={8}      // Adjusted padding
+                    paddingTop={12}     // Increased top padding
                     paddingBottom={8}   // Adjusted padding
                     onActivate={handleActivate}
                     onMove={handleMove}

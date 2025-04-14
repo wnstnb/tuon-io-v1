@@ -1153,9 +1153,30 @@ function EditorPageContent() {
         anchor="left"
         open={isDrawerOpen}
         onClose={toggleDrawer(false)}
+        PaperProps={{
+          sx: {
+            backgroundColor: 'var(--background)',
+            color: 'var(--foreground)',
+            fontFamily: '"JetBrains Mono", monospace',
+            borderRight: '1px solid var(--border)',
+            padding: '12px 0',
+            '& .MuiBackdrop-root': {
+              backgroundColor: 'var(--background-50)'
+            }
+          }
+        }}
       >
         <Box
-          sx={{ width: 250, height: '100%', display: 'flex', flexDirection: 'column' }}
+          sx={{ 
+            width: 250, 
+            height: '100%', 
+            display: 'flex', 
+            flexDirection: 'column',
+            backgroundColor: 'var(--background)',
+            color: 'var(--foreground)',
+            fontFamily: '"JetBrains Mono", monospace',
+            paddingRight: '8px'
+          }}
           role="presentation"
         >
           <div className="flex-grow overflow-auto">
