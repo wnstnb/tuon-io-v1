@@ -42,7 +42,22 @@ export default function TitleBar({ initialTitle = 'Untitled Artifact', onTitleCh
   };
 
   return (
-    <div className="title-bar">
+    <div className="title-bar flex items-center">
+      <div className="save-status-container mr-3">
+        <button 
+          onClick={onForceSync} 
+          className={`manual-save-button ${isPersisted ? '' : 'disabled'}`}
+          disabled={!isPersisted}
+          title="Save changes"
+          aria-label="Save changes"
+        >
+          <Save size={16} />
+        </button>
+        <span className={`save-status-indicator ${saveStatus}`} title={statusMessage}>
+          {statusMessage}
+        </span>
+      </div>
+      
       {isEditing ? (
         <input
           type="text"
@@ -61,20 +76,6 @@ export default function TitleBar({ initialTitle = 'Untitled Artifact', onTitleCh
           {title}
         </h2>
       )}
-      <div className="save-status-container">
-        <button 
-          onClick={onForceSync} 
-          className={`manual-save-button ${isPersisted ? '' : 'disabled'}`}
-          disabled={!isPersisted}
-          title="Save changes"
-          aria-label="Save changes"
-        >
-          <Save size={16} />
-        </button>
-        <span className={`save-status-indicator ${saveStatus}`} title={statusMessage}>
-          {statusMessage}
-        </span>
-      </div>
     </div>
   );
 } 

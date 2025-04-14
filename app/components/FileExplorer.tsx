@@ -8,7 +8,11 @@ import { FolderService, Folder } from '../lib/services/FolderService';
 import { ArtifactService, Artifact } from '../lib/services/ArtifactService';
 import { useRouter } from 'next/navigation'; // For navigation
 // Import icons (e.g., from react-icons)
-import { FaFolder, FaFolderOpen, FaFileAlt, FaPlus, FaList, FaTrash } from 'react-icons/fa';
+import { FaFolder, FaFolderOpen, FaFileAlt, FaChevronRight, FaChevronDown } from 'react-icons/fa';
+// Import MUI icons
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import LibraryAddCheckIcon from '@mui/icons-material/LibraryAddCheck';
 
 // Define the structure for nodes in the react-arborist tree
 interface TreeNodeData {
@@ -94,23 +98,48 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
     return (
         <div
             ref={dragHandle} // Required for drag-and-drop
-            style={style}
-            className={`node-container px-1 flex items-center hover:bg-gray-200 dark:hover:bg-gray-700 rounded ${node.state.isSelected ? 'bg-blue-100 dark:bg-blue-800' : ''} ${node.state.isEditing ? 'editing' : ''}`}
+            style={style} // Includes positioning and default font styles
+            // Apply custom classes for spacing, hover, selection, etc.
+            // Removed default rounded corners, apply only on hover/select maybe?
+            className={`node-container flex items-center ${node.state.isEditing ? 'editing' : ''}`}
+            // Main click handler for the row (activates leaves, selects/focuses folders)
             onClick={(e) => {
-                // Prevent activating folder on single click, allow selecting
+                // Don't trigger this if the click was on the toggle chevron
+                const target = e.target as HTMLElement;
+                if (target.closest('.folder-toggle-icon')) return;
+
                 if (node.isLeaf) node.activate();
-                // Allow selection without activation for folders
-                 if (!node.isLeaf && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-                     node.select();
-                     node.focus();
-                 }
+                if (!node.isLeaf && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                    node.select();
+                    node.focus();
+                }
             }}
-            onDoubleClick={() => node.isInternal && node.toggle()} // Toggle folders on double click
+            // Remove double-click toggle from the whole div, only toggle via chevron or explicitly
+            // onDoubleClick={() => node.isInternal && node.toggle()}
         >
-            {/* Indentation spacer - Adjust multiplier as needed */}
-            <span style={{ width: `${node.level * 16}px` }} className="inline-block flex-shrink-0"></span>
-            <span className="node-content flex items-center space-x-1 flex-grow min-w-0">
-                <Icon className="icon flex-shrink-0 w-4 h-4" />
+            {/* Wrapper for content with padding and hover/selection background */} 
+            <div
+                className={`flex-grow flex items-center space-x-1 min-w-0 px-2 py-1 rounded
+                            ${node.state.isSelected ? 'bg-gray-200 dark:bg-slate-700 font-medium' : 'hover:bg-gray-100 dark:hover:bg-slate-800'}`}
+            >
+                {/* Indentation spacer */}
+                <span style={{ width: `${node.level * 12}px` }} className="inline-block flex-shrink-0"></span>
+
+                {/* Folder Toggle Chevron */} 
+                <span
+                    className={`folder-toggle-icon flex-shrink-0 w-4 h-4 flex items-center justify-center ${!node.isInternal ? 'invisible' : 'cursor-pointer text-gray-500 dark:text-gray-400'}`}
+                    onClick={(e) => {
+                        e.stopPropagation(); // Prevent row onClick
+                        if (node.isInternal) node.toggle();
+                    }}
+                >
+                    {node.isInternal && (node.isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />)}
+                </span>
+
+                {/* Main Icon (Folder/File) */} 
+                <Icon className="icon flex-shrink-0 w-4 h-4 text-gray-600 dark:text-gray-400" />
+
+                {/* Name/Input Area */} 
                 {node.isEditing ? (
                     <input
                         type="text"
@@ -122,14 +151,17 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
                             if (e.key === 'Escape') node.reset();
                         }}
                         autoFocus
-                        className="node-edit-input p-0 border border-blue-400 flex-grow bg-white dark:bg-gray-800 text-black dark:text-white" // Basic styling
+                        className="node-edit-input px-1 py-0 border border-blue-400 rounded-sm flex-grow bg-white dark:bg-gray-700 text-black dark:text-white text-sm"
                     />
                 ) : (
-                    <span onDoubleClick={(e) => { e.stopPropagation(); node.edit(); }} className="node-name truncate flex-grow min-w-0">
+                    <span
+                        onDoubleClick={(e) => { e.stopPropagation(); node.edit(); }}
+                        className="node-name truncate flex-grow min-w-0 text-sm cursor-default"
+                    >
                         {node.data.name}
                     </span> // Edit on double click name
                 )}
-            </span>
+            </div>
         </div>
     );
 }
@@ -388,35 +420,32 @@ export function FileExplorer() {
          return <div className="p-4 text-sm text-gray-500 dark:text-gray-400">No files found or loading...</div>;
     }
 
-    return (
+  return (
         <div className="file-explorer-container h-full w-full overflow-auto text-sm bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col">
             {/* --- Action Button Row --- */}
             <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2">
-                <button
+          <button 
                     title="New Folder"
                     onClick={handleCreateFolder}
                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
                     disabled={!user || loading}
                 >
-                    <FaPlus size={14} />
-                </button>
-                {/* This button currently doesn't toggle a mode, but serves as a placeholder/visual cue */}
-                <button
+                    <CreateNewFolderIcon fontSize="small" />
+          </button>
+          <button
                     title="Multi-select (use Shift/Ctrl/Meta + Click)"
                     className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
                     disabled={!user || loading}
-                     // Add active styling if implementing a strict mode toggle later
-                    // onClick={toggleMultiSelectMode} // Add handler if implementing strict mode
                 >
-                    <FaList size={14} />
-                </button>
-                <button
+                    <LibraryAddCheckIcon fontSize="small" />
+          </button>
+          <button 
                     title="Delete Selected"
-                    onClick={handleDeleteSelected}
+            onClick={handleDeleteSelected}
                     className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-gray-600"
-                    disabled={!user || loading || selectionCount === 0} // Use state for disable check
+                    disabled={!user || loading || selectionCount === 0}
                 >
-                    <FaTrash size={14} />
+                    <DeleteOutlineIcon fontSize="small" />
                 </button>
             </div>
             {/* --- Tree Component --- */}
@@ -424,22 +453,21 @@ export function FileExplorer() {
                 <Tree<TreeNodeData>
                     ref={treeRef}
                     data={treeData ?? []}
-                    indent={16}
-                    rowHeight={28}
+                    indent={12}         // Reduced indent
+                    rowHeight={32}      // Slightly increased row height for padding
                     openByDefault={false}
                     disableDrag={false}
                     disableDrop={false}
-                    paddingTop={10}
-                    paddingBottom={10}
+                    paddingTop={8}      // Adjusted padding
+                    paddingBottom={8}   // Adjusted padding
                     onActivate={handleActivate}
                     onMove={handleMove}
                     onRename={handleRename}
                     onSelect={handleSelectionChange} // Update selection count state
-                    // onDelete={handleDelete} // Can use Tree's internal delete or our custom one
                 >
                     {Node}
                 </Tree>
-            </div>
         </div>
-    );
-}
+    </div>
+  );
+} 

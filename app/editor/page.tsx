@@ -4,10 +4,14 @@ import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } fr
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import Drawer from '@mui/material/Drawer';
+import Box from '@mui/material/Box';
+import IconButton from '@mui/material/IconButton';
+import MenuIcon from '@mui/icons-material/Menu';
 import Editor from '../components/Editor';
 import EditorFAB from '../components/EditorFAB';
 import TitleBar from '../components/TitleBar';
-import LeftPane from '../components/LeftPane';
+import { FileExplorer } from '../components/FileExplorer';
 import RightPane from '../components/RightPane';
 import GlobalSearch from '../components/GlobalSearch';
 import { type Block, type PartialBlock, BlockNoteEditor } from "@blocknote/core";
@@ -55,12 +59,10 @@ function EditorPageContent() {
 
   const [title, setTitle] = useState<string>('Untitled Artifact');
   const [editorContent, setEditorContent] = useState<Block[]>([]);
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
-  const [leftPanelSize, setLeftPanelSize] = useState(20);
   const [showRightPanel, setShowRightPanel] = useState(false);
   const [rightPanelSize, setRightPanelSize] = useState(20);
-  const [isLeftPanelAnimating, setIsLeftPanelAnimating] = useState(false);
   const [isRightPanelAnimating, setIsRightPanelAnimating] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // -- NEW State Management --
   const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(() => {
@@ -112,33 +114,6 @@ function EditorPageContent() {
   }, [currentArtifactId]);
 
   // Basic UI interaction callbacks
-  const toggleLeftPanel = useCallback(() => {
-    if (isLeftPanelAnimating) return;
-    
-    if (showLeftPanel) {
-      // Collapsing left panel
-      setIsLeftPanelAnimating(true);
-      const leftPanel = document.getElementById('left-panel');
-      if (leftPanel) {
-        leftPanel.style.animation = 'slideOutLeft 0.3s ease forwards';
-        setTimeout(() => {
-          setShowLeftPanel(false);
-          setIsLeftPanelAnimating(false);
-        }, 300);
-      } else {
-        setShowLeftPanel(false);
-        setIsLeftPanelAnimating(false);
-      }
-    } else {
-      // Expanding left panel
-      setShowLeftPanel(true);
-      setIsLeftPanelAnimating(true);
-      setTimeout(() => {
-        setIsLeftPanelAnimating(false);
-      }, 300);
-    }
-  }, [showLeftPanel, isLeftPanelAnimating]);
-
   const toggleRightPanel = useCallback(() => {
     if (isRightPanelAnimating) return;
     
@@ -167,22 +142,15 @@ function EditorPageContent() {
   }, [showRightPanel, isRightPanelAnimating]);
 
   const handlePanelResize = useCallback((sizes: number[]) => {
-    if (sizes.length > 0) {
-      // Only update if the size is different to avoid unnecessary re-renders
-      if (Math.abs(sizes[0] - leftPanelSize) > 0.5) {
-        setLeftPanelSize(sizes[0]);
-        if (process.env.NODE_ENV === 'development') console.log('Left panel resized to:', sizes[0]);
-      }
-      
-      // If right panel is visible, update its size
-      if (showRightPanel && sizes.length > 2) {
-        if (Math.abs(sizes[2] - rightPanelSize) > 0.5) {
-          setRightPanelSize(sizes[2]);
-          if (process.env.NODE_ENV === 'development') console.log('Right panel resized to:', sizes[2]);
-        }
-      }
+    if (sizes.length === 2 && showRightPanel) {
+       if (Math.abs(sizes[1] - rightPanelSize) > 0.5) {
+           setRightPanelSize(sizes[1]);
+           if (process.env.NODE_ENV === 'development') console.log('Right panel resized to:', sizes[1]);
+       }
+    } else if (sizes.length > 0) {
+        // console.log('Content panel size:', sizes[0]); // Optional log
     }
-  }, [leftPanelSize, rightPanelSize, showRightPanel]);
+  }, [rightPanelSize, showRightPanel]);
 
   // Helper function to extract text content for title inference
   const extractTextForInference = (content: Block[]): string => {
@@ -698,7 +666,7 @@ function EditorPageContent() {
     } catch (error) {
       console.error('Error calling title inference API:', error);
     }
-  }, [user, title, handleTitleChange, userHasManuallySetTitle]); // ADDED userHasManuallySetTitle dependency
+  }, [user, title, handleTitleChange, userHasManuallySetTitle]);
 
   // Load an artifact from Supabase
   const loadArtifact = useCallback(async (idToLoad: string, user: User) => {
@@ -1140,74 +1108,76 @@ function EditorPageContent() {
     }
   }, [currentArtifactId, isArtifactPersisted]);
 
+  // --- Drawer Toggle Handler ---
+  const toggleDrawer = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
+    if (
+      event.type === 'keydown' &&
+      ((event as React.KeyboardEvent).key === 'Tab' ||
+        (event as React.KeyboardEvent).key === 'Shift')
+    ) {
+      return;
+    }
+    setIsDrawerOpen(open);
+  };
+  // --- END Drawer Handler ---
+
   return (
     <main className="app-container">
       <header>
-        <div className="header-content" style={{ paddingLeft: 0 }}>
-          <h1 className="font-jetbrains-mono" style={{ paddingLeft: '8px' }}>tuon.io</h1>
+        <div className="header-content flex items-center justify-between px-4">
+          <div className="flex items-center">
+              <IconButton
+                 color="inherit"
+                 aria-label="open drawer"
+                 onClick={toggleDrawer(true)}
+                 edge="start"
+                 sx={{ mr: 2, ml: 3 }}
+              >
+                 <MenuIcon />
+              </IconButton>
+              <span className="font-jetbrains-mono text-lg ml-2">tuon.io</span>
+          </div>
           
           <GlobalSearch />
           
-          <div className="header-actions">
-            <div className="save-status" title={getSaveStatusTitle()}>
-                <span>{getSaveStatusMessage()}</span>
-            </div>
-            <button onClick={() => signOut()} className="sign-out-button">
-              Sign Out
+          <div className="header-actions flex items-center">
+            <button onClick={() => signOut()} className="sign-out-button mr-2">
+              <span className="font-jetbrains-mono">Logout</span>
             </button>
             <ThemeToggle />
           </div>
         </div>
       </header>
+
+      <Drawer
+        anchor="left"
+        open={isDrawerOpen}
+        onClose={toggleDrawer(false)}
+      >
+        <Box
+          sx={{ width: 250, height: '100%', display: 'flex', flexDirection: 'column' }}
+          role="presentation"
+        >
+          <div className="flex-grow overflow-auto">
+              <FileExplorer />
+          </div>
+        </Box>
+      </Drawer>
+
       <div className="content-area">
         <PanelGroup 
-          autoSaveId="tuon-layout" 
+          autoSaveId="tuon-layout-main"
           direction="horizontal"
           onLayout={handlePanelResize}
+          className="flex-grow min-w-0"
         >
-          {showLeftPanel && (
-            <>
-              <Panel 
-                id="left-panel" 
-                defaultSize={leftPanelSize}
-                minSize={10}
-                maxSize={40}
-                order={1}
-                className="animated-panel left-panel"
-                collapsible={false}
-              >
-                <LeftPane />
-              </Panel>
-              <PanelResizeHandle 
-                id="left-resize-handle" 
-                className="resize-handle"
-              >
-                <div className="resize-line"></div>
-                <button 
-                  onClick={toggleLeftPanel}
-                  className="toggle-button"
-                  aria-label="Collapse left panel"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-              </PanelResizeHandle>
-            </>
-          )}
           <Panel 
             id="content-panel" 
-            order={2}
-            className="animated-panel"
+            order={1}
+            minSize={30}
+            className="animated-panel flex flex-col overflow-hidden"
           >
-            <div className="main-content">
-              {!showLeftPanel && (
-                <button
-                  onClick={toggleLeftPanel}
-                  className="toggle-button toggle-button-left"
-                  aria-label="Expand left panel"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              )}
+            <div className="main-content flex-grow flex flex-col overflow-hidden">
               <TitleBar 
                 initialTitle={title} 
                 onTitleChange={handleTitleChange} 
@@ -1217,50 +1187,37 @@ function EditorPageContent() {
                 lastSynced={lastSuccessfulSyncTime ? lastSuccessfulSyncTime.toISOString() : null}
                 onForceSync={forceSync}
               />
-              <Editor 
-                key={`editor-instance-${currentArtifactId}`}
-                {...editorProps}
-                onEditorReady={setEditorReference}
-              />
-              <EditorFAB 
-                artifactId={currentArtifactId}
-                userId={user?.id}
-              />
-              {!showRightPanel && (
-                <button
-                  onClick={toggleRightPanel}
-                  className="toggle-button toggle-button-right"
-                  aria-label="Expand right panel"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-              )}
+              <div className="flex-grow overflow-auto relative">
+                  <Editor 
+                    key={`editor-instance-${currentArtifactId}`}
+                    {...editorProps}
+                    onEditorReady={setEditorReference}
+                  />
+                  <EditorFAB 
+                    artifactId={currentArtifactId}
+                    userId={user?.id}
+                  />
+              </div>
             </div>
           </Panel>
-          {/* Always render the handle and panel, control collapse via size and collapsible prop */}
+          
           <PanelResizeHandle 
             id="right-resize-handle" 
             className="resize-handle"
           >
-            {/* Remove the custom button, library handles collapse interaction */}
             <div className="resize-line"></div>
           </PanelResizeHandle>
           <Panel 
             id="right-panel" 
-            // Set initial size based on showRightPanel state (0 for collapsed)
             defaultSize={showRightPanel ? rightPanelSize : 0}
-            // Allow collapsing to size 0
-            minSize={0} 
+            minSize={0}
             maxSize={40}
-            order={3}
+            order={2}
             className="animated-panel right-panel"
-            // Enable collapsing feature
-            collapsible={true} 
-            // Sync panel collapse/expand events back to React state
-            onCollapse={() => setShowRightPanel(false)} 
+            collapsible={true}
+            onCollapse={() => setShowRightPanel(false)}
             onExpand={() => setShowRightPanel(true)}   
           >
-            {/* Render RightPane unconditionally */}
             <RightPane />
           </Panel>
         </PanelGroup>

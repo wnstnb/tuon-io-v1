@@ -26,7 +26,7 @@ export default function ChatInterface() {
             aria-label="New Conversation"
           >
             <Plus size={16} />
-            <span>New Chat</span>
+            <span>New</span>
           </button>
         </div>
         <div className="header-button-container">
