@@ -1236,34 +1236,32 @@ function EditorPageContent() {
               )}
             </div>
           </Panel>
-          {showRightPanel && (
-            <>
-              <PanelResizeHandle 
-                id="right-resize-handle" 
-                className="resize-handle"
-              >
-                <div className="resize-line"></div>
-                <button 
-                  onClick={toggleRightPanel}
-                  className="toggle-button"
-                  aria-label="Collapse right panel"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </PanelResizeHandle>
-              <Panel 
-                id="right-panel" 
-                defaultSize={rightPanelSize}
-                minSize={10}
-                maxSize={40}
-                order={3}
-                className="animated-panel right-panel"
-                collapsible={false}
-              >
-                <RightPane />
-              </Panel>
-            </>
-          )}
+          {/* Always render the handle and panel, control collapse via size and collapsible prop */}
+          <PanelResizeHandle 
+            id="right-resize-handle" 
+            className="resize-handle"
+          >
+            {/* Remove the custom button, library handles collapse interaction */}
+            <div className="resize-line"></div>
+          </PanelResizeHandle>
+          <Panel 
+            id="right-panel" 
+            // Set initial size based on showRightPanel state (0 for collapsed)
+            defaultSize={showRightPanel ? rightPanelSize : 0}
+            // Allow collapsing to size 0
+            minSize={0} 
+            maxSize={40}
+            order={3}
+            className="animated-panel right-panel"
+            // Enable collapsing feature
+            collapsible={true} 
+            // Sync panel collapse/expand events back to React state
+            onCollapse={() => setShowRightPanel(false)} 
+            onExpand={() => setShowRightPanel(true)}   
+          >
+            {/* Render RightPane unconditionally */}
+            <RightPane />
+          </Panel>
         </PanelGroup>
       </div>
     </main>
