@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Files } from 'lucide-react';
-import FileExplorer from './FileExplorer';
+import { FileExplorer } from './FileExplorer';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function LeftPane() {
@@ -20,7 +20,11 @@ export default function LeftPane() {
 
       <div className="tab-content">
         <div className="tab-panel active">
-          <FileExplorer currentArtifactId={currentArtifactId} />
+          {
+            // TODO: Add a header or other elements above the file explorer if needed
+          }
+          {/* <FileExplorer currentArtifactId={currentArtifactId} /> */}
+          <FileExplorer />
         </div>
       </div>
     </div>
