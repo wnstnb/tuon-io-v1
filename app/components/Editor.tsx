@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { type Block, type Selection, type BlockNoteEditor as BlockNoteEditorType } from "@blocknote/core";
 import dynamic from 'next/dynamic';
 import { isEqual } from 'lodash-es'; // Import isEqual
+import LoopOutlinedIcon from '@mui/icons-material/LoopOutlined'; // NEW: Import LoopOutlinedIcon
 
 // Dynamically import BlockNote components with SSR disabled
 const BlockNoteEditor = dynamic(
@@ -149,7 +150,7 @@ const BlockNoteEditor = dynamic(
                 if (props.onChange) {
                   props.onChange(newBlocks, sourceArtifactId); // Pass artifactId to onChange
                 }
-                if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
+                if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1500);
               } catch (error) {
                 console.error('Editor (Inner): Error parsing markdown:', error);
                 if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error parsing content' });
@@ -191,7 +192,7 @@ const BlockNoteEditor = dynamic(
               editor.replaceBlocks(targetBlocks, newBlocks);
 
               console.log('Editor: Modification applied successfully.');
-              if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 500);
+              if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
 
               // Trigger onChange after modification if needed (consider debouncing/throttling)
               if (props.onChange) {
@@ -324,12 +325,10 @@ interface EditorProps {
   artifactId?: string;
   userId?: string;
   onContentAccessRequest?: (content: Block[]) => void;
-  // NEW: Need to pass down setAiStatus if used inside BlockNoteEditor dynamic import
   setAiStatus?: (status: { isProcessing: boolean; message?: string }) => void; 
-  // NEW: Need to pass down currentContent if used inside BlockNoteEditor dynamic import
   currentContent?: Block[]; 
-  // NEW: Add onEditorReady prop
   onEditorReady?: (editor: BlockNoteEditorType) => void;
+  isEditorProcessing?: boolean; 
 }
 
 // Rename the original function component
@@ -339,24 +338,29 @@ const EditorComponent = ({
   artifactId, 
   userId, 
   onContentAccessRequest,
-  // Ensure these are passed down if needed by the inner component's effects/handlers
   setAiStatus, 
   currentContent,
-  // NEW: Add onEditorReady prop
-  onEditorReady
+  onEditorReady,
+  isEditorProcessing
 }: EditorProps) => {
   // State to track content updates from AI (might be needed for keying/remounting)
   const [aiContent, setAiContent] = React.useState<Block[] | null>(null);
   // State to track current editor content (needed for onContentAccessRequest)
   // Let's rename internal state to avoid confusion with prop name
   const [internalCurrentContent, setInternalCurrentContent] = React.useState<Block[]>(initialContent || []);
-  // State to show status indicator for AI operations 
+  // State to show status indicator for AI operations
   const [internalAiStatus, setInternalAiStatus] = React.useState<{
     isProcessing: boolean;
     operation?: string;
     message?: string;
   }>({ isProcessing: false });
-  
+
+  // --- NEW: Add logging for internalAiStatus changes ---
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development') console.log('[EditorComponent] internalAiStatus changed:', internalAiStatus);
+  }, [internalAiStatus]);
+  // --- END NEW LOGGING ---
+
   // Update internalCurrentContent when initialContent changes (e.g., loading from DB)
   React.useEffect(() => {
     setInternalCurrentContent(initialContent || []);
@@ -382,16 +386,16 @@ const EditorComponent = ({
   }, [artifactId]);
 
   return (
-    <div className="editor-container">
+    <div className="editor-container relative h-full">
+      {/* Use internalAiStatus.isProcessing to control the overlay */}
       {internalAiStatus.isProcessing && (
-        <div className="ai-status-indicator">
-          <span className="ai-status-icon">🔄</span>
-          <span className="ai-status-message">{internalAiStatus.message}</span>
+        <div className="editor-processing-overlay">
+          {/* Render the spinning LoopOutlinedIcon */}
+          <LoopOutlinedIcon className="spinner" sx={{ fontSize: 40 }} />
         </div>
       )}
       <ThemeAwareEditor 
         initialContent={safeInitialContent}
-        // Pass down necessary state and functions
         onChange={(blocks) => {
           // When editor changes, update currentContent and call parent onChange
           setAiContent(null); // User edited, clear AI content override
@@ -400,14 +404,12 @@ const EditorComponent = ({
             onChange(blocks); // Call parent handler with no artifactId (user edit)
           }
         }}
-        // Pass down the state setter and current content for the inner component
         setAiStatus={setInternalAiStatus} 
         currentContent={internalCurrentContent} 
-        onContentAccessRequest={onContentAccessRequest} // Pass down
-        EditorComponent={BlockNoteEditor} // Pass the dynamically loaded inner editor
+        onContentAccessRequest={onContentAccessRequest}
+        EditorComponent={BlockNoteEditor}
         artifactId={artifactId}
         userId={userId}
-        // NEW: Pass onEditorReady prop
         onEditorReady={onEditorReady}
       />
     </div>

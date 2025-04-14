@@ -85,6 +85,7 @@ function EditorPageContent() {
   const [userHasManuallySetTitle, setUserHasManuallySetTitle] = useState<boolean>(false); // NEW: Track manual title edits
   const [pendingSyncArtifactId, setPendingSyncArtifactId] = useState<string | null>(null); // ID waiting for DB sync
   const [lastSuccessfulSyncTime, setLastSuccessfulSyncTime] = useState<Date | null>(null); // NEW: Track last successful sync time
+  const [isEditorProcessing, setIsEditorProcessing] = useState<boolean>(false);
 
   // Ref for PanelGroup imperative API
   const panelGroupRef = useRef<ImperativePanelGroupHandle>(null);
@@ -637,6 +638,10 @@ function EditorPageContent() {
       return; // Don't infer if content is too short
     }
 
+    if (isMounted.current) {
+      setIsEditorProcessing(true); // Set processing state to true
+    }
+
     try {
       const response = await fetch('/api/infer-title', {
         method: 'POST',
@@ -661,9 +666,14 @@ function EditorPageContent() {
         console.error('Title inference API call failed:', response.statusText);
       }
     } catch (error) {
-      console.error('Error calling title inference API:', error);
+      console.error('Error during title inference:', error);
+      // Optionally handle the error state in UI if needed
+    } finally {
+      if (isMounted.current) {
+        setIsEditorProcessing(false); // Ensure processing state is set to false
+      }
     }
-  }, [user, title, handleTitleChange, userHasManuallySetTitle]);
+  }, [user, title, userHasManuallySetTitle, handleTitleChange]); // Added dependencies
 
   // Load an artifact from Supabase
   // Explicitly type the function signature
@@ -1208,11 +1218,14 @@ function EditorPageContent() {
                 onForceSync={forceSync}
               />
               <div className="flex-grow overflow-auto relative">
-                  <Editor 
-                    key={`editor-instance-${currentArtifactId}`}
-                    {...editorProps}
-                    onEditorReady={setEditorReference}
-                  />
+                  <Suspense fallback={<EditorLoading />}>
+                    <Editor 
+                      key={`editor-instance-${currentArtifactId}`}
+                      {...editorProps}
+                      onEditorReady={setEditorReference}
+                      isEditorProcessing={isEditorProcessing}
+                    />
+                  </Suspense>
                   <EditorFAB 
                     artifactId={currentArtifactId}
                     userId={user?.id}

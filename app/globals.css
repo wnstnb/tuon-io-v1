@@ -191,6 +191,7 @@ p {
 }
 
 .editor-container {
+  position: relative;
   height: 100%;
   max-width: 100%;
   margin: 0;
@@ -2154,8 +2155,8 @@ input[type="range"]::-webkit-slider-runnable-track {
   background-color: var(--bg-color);
   border-radius: 6px;
   border: 1px solid var(--border-color);
-  max-width: none;
-  width: 60%;
+  max-width: 70%;
+  width: 50%;
   position: relative;
   margin: 0;
   justify-self: center;
@@ -2664,4 +2665,70 @@ html.dark .ai-status-indicator {
   border-top: 1px solid var(--border-color);
   position: relative;
   flex-shrink: 0; /* Prevent shrinking when in flex column */
-} 
+}
+
+/* --- Editor --- */
+.editor-pane {
+  /* ... existing styles ... */
+}
+
+.editor-processing-overlay {
+  position: absolute;
+  inset: 0; /* Cover the entire container */
+  /* Re-add flex to center the icon */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10; /* Ensure it's above the editor content */
+  pointer-events: none;
+  border-radius: inherit; /* Optional: Match parent container's border */
+}
+
+/* Add pseudo-element for overlay background and pinwheel */
+.editor-processing-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-color: rgba(48, 48, 48, 0.7); /* Light gray semi-transparent background */
+  /* Background only, icon handles the visual */
+  border-radius: inherit; /* Match parent container's border */
+}
+
+/* ~line 2685 */
+.dark .editor-processing-overlay::before { /* Apply dark mode background to pseudo-element */
+   background-color: rgba(100, 100, 100, 0.7); /* Dark gray semi-transparent background */
+   /* Background only */
+   /* REMOVED background-image */
+}
+
+/* Style the icon within the overlay */
+.editor-processing-overlay .spinner {
+  /* Example styling, adjust as needed */
+  color: #3b82f6; /* Blue color */
+}
+
+.dark .editor-processing-overlay .spinner {
+  color: #60a5fa; /* Lighter blue for dark mode */
+}
+
+/* ~line 2690 - .spinner class is now used for the icon */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* ~line 2694 */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Existing Title Bar styles might follow */
+.title-bar {
+  /* ... existing styles ... */
+}
+
+/* ... rest of globals.css ... */ 

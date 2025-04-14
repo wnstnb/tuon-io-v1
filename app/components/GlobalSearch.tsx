@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, Loader2, History } from 'lucide-react';
 import { ArtifactService } from '../lib/services/ArtifactService';
 import { useAI } from '../context/AIContext';
+import { groupBy } from 'lodash-es';
+import { useSupabase } from '../context/SupabaseContext';
 
 interface SearchResult {
   id: string;
@@ -19,11 +21,13 @@ export default function GlobalSearch() {
     selectConversation, 
     isLoadingConversations
   } = useAI();
+  const { session } = useSupabase();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [recentItems, setRecentItems] = useState<SearchResult[]>([]);
+  const [isLoadingRecents, setIsLoadingRecents] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [activeTab, setActiveTab] = useState<'search' | 'history'>('search');
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   
@@ -111,7 +115,7 @@ export default function GlobalSearch() {
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (query && activeTab === 'search') {
+      if (query) {
         searchItems(query);
       } else {
         setResults([]);
@@ -119,13 +123,8 @@ export default function GlobalSearch() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, activeTab]);
+  }, [query]);
   
-  // Filter conversations based on search query in history tab
-  const filteredConversations = conversationHistory.filter(
-    conversation => conversation.title.toLowerCase().includes(query.toLowerCase())
-  );
-
   // Handle selecting a result
   const handleResultClick = (result: SearchResult) => {
     if (result.type === 'artifact') {
@@ -153,6 +152,64 @@ export default function GlobalSearch() {
     });
   };
 
+  // Group results by type
+  const groupedResults = groupBy(results, 'type');
+
+  // Function to load recent items
+  const loadRecentItems = useCallback(async () => {
+    if (isLoadingRecents) return;
+    setIsLoadingRecents(true);
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      console.warn('No user ID found, cannot load recent items.');
+      setRecentItems([]);
+      setIsLoadingRecents(false);
+      return;
+    }
+
+    try {
+      // Fetch recent artifacts
+      const recentArtifacts = await ArtifactService.getRecentArtifacts(userId);
+      const artifactResults = recentArtifacts.map(artifact => ({
+        id: artifact.id,
+        title: artifact.title,
+        type: 'artifact' as const,
+        preview: artifact.preview
+      }));
+
+      // Get recent conversations (already sorted by update time in useAI hook? Assuming yes)
+      const recentConversations = conversationHistory
+        .slice(0, 5)
+        .map(conversation => ({
+          id: conversation.id,
+          title: conversation.title,
+          type: 'conversation' as const,
+          preview: conversation.messages && conversation.messages.length > 0
+            ? conversation.messages[0].content.substring(0, 60) + '...'
+            : 'Empty conversation'
+        }));
+
+      setRecentItems([...artifactResults, ...recentConversations]);
+    } catch (error) {
+      console.error('Error loading recent items:', error);
+      setRecentItems([]);
+    } finally {
+      setIsLoadingRecents(false);
+    }
+  }, [conversationHistory, isLoadingRecents, session]);
+
+  // Group recent items by type
+  const groupedRecentItems = groupBy(recentItems, 'type');
+
+  // Handle focus - load recents if query is empty
+  const handleFocus = () => {
+    setShowResults(true);
+    if (!query) {
+      loadRecentItems();
+    }
+  };
+
   return (
     <div className="global-search-container" ref={searchRef}>
       <div className="search-icon">
@@ -161,94 +218,125 @@ export default function GlobalSearch() {
       <input 
         type="text" 
         className="global-search-input" 
-        placeholder={activeTab === 'search' ? "Search docs" : "Search conversations..."}
+        placeholder="Search artifacts & conversations..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => setShowResults(true)}
+        onFocus={handleFocus}
         aria-label="Search for conversations and artifacts"
       />
       <div className="search-shortcut">Ctrl K</div>
       
       {showResults && (
         <div className="search-results-dropdown">
-          <div className="search-tabs">
-            <button 
-              className={`search-tab ${activeTab === 'search' ? 'active' : ''}`}
-              onClick={() => setActiveTab('search')}
-            >
-              <Search size={14} />
-              <span>Search</span>
-            </button>
-            <button 
-              className={`search-tab ${activeTab === 'history' ? 'active' : ''}`}
-              onClick={() => setActiveTab('history')}
-            >
-              <History size={14} />
-              <span>History</span>
-            </button>
-          </div>
-          
-          {activeTab === 'search' ? (
-            // SEARCH TAB CONTENT
-            <>
-              {isSearching ? (
-                <div className="search-loading">Searching...</div>
-              ) : results.length > 0 ? (
-                <ul className="search-results-list">
-                  {results.map((result) => (
-                    <li 
-                      key={result.id} 
-                      className="search-result-item"
-                      onClick={() => handleResultClick(result)}
-                    >
-                      <div className="result-type">
-                        {result.type === 'artifact' ? '📄' : '💬'}
-                      </div>
-                      <div className="result-content">
-                        <div className="result-title">{result.title}</div>
-                        <div className="result-preview">{result.preview}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : query ? (
-                <div className="no-results">No results found</div>
-              ) : (
-                <div className="search-placeholder">
-                  Start typing to search for artifacts and conversations
-                </div>
-              )}
-            </>
+          {/* Conditional Rendering: Show Recents or Search Results */}
+          {query ? (
+            // SEARCH RESULTS (when query exists)
+            isSearching ? (
+              <div className="search-loading">Searching...</div>
+            ) : results.length > 0 ? (
+              <div className="grouped-search-results">
+                {/* Render Artifacts section */}
+                {groupedResults.artifact && groupedResults.artifact.length > 0 && (
+                  <div className="results-group">
+                    <h4 className="results-group-header">Artifacts</h4>
+                    <ul className="search-results-list">
+                      {groupedResults.artifact.map((result) => (
+                        <li 
+                          key={result.id} 
+                          className="search-result-item"
+                          onClick={() => handleResultClick(result)}
+                        >
+                          <div className="result-type">📄</div>
+                          <div className="result-content">
+                            <div className="result-title">{result.title}</div>
+                            <div className="result-preview">{result.preview}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Render Conversations section */}
+                {groupedResults.conversation && groupedResults.conversation.length > 0 && (
+                  <div className="results-group">
+                    <h4 className="results-group-header">Conversations</h4>
+                    <ul className="search-results-list">
+                      {groupedResults.conversation.map((result) => (
+                        <li 
+                          key={result.id} 
+                          className="search-result-item"
+                          onClick={() => handleResultClick(result)}
+                        >
+                          <div className="result-type">💬</div>
+                          <div className="result-content">
+                            <div className="result-title">{result.title}</div>
+                            <div className="result-preview">{result.preview}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="no-results">No results found for "{query}"</div>
+            )
           ) : (
-            // HISTORY TAB CONTENT
-            <div className="history-list">
-              {isLoadingConversations ? (
-                <div className="empty-history">
-                  <Loader2 size={24} className="spinner" />
-                  <p>Loading conversations...</p>
-                </div>
-              ) : filteredConversations.length === 0 ? (
-                <div className="empty-history">
-                  <p>{query ? 'No matching conversations' : 'No conversations yet'}</p>
-                </div>
-              ) : (
-                filteredConversations.map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    className="history-item"
-                    onClick={() => {
-                      selectConversation(conversation.id);
-                      setShowResults(false);
-                    }}
-                  >
-                    <div className="conversation-info">
-                      <span className="conversation-title">{conversation.title}</span>
-                      <span className="conversation-date">{formatDate(conversation.updatedAt)}</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
+            // RECENT ITEMS (when query is empty)
+            isLoadingRecents ? (
+              <div className="search-loading">Loading recent items...</div>
+            ) : recentItems.length > 0 ? (
+              <div className="grouped-search-results">
+                {/* Render Recent Artifacts section */}
+                {groupedRecentItems.artifact && groupedRecentItems.artifact.length > 0 && (
+                  <div className="results-group">
+                    <h4 className="results-group-header">Recent Artifacts</h4>
+                    <ul className="search-results-list">
+                      {groupedRecentItems.artifact.map((item) => (
+                        <li 
+                          key={item.id} 
+                          className="search-result-item"
+                          onClick={() => handleResultClick(item)}
+                        >
+                          <div className="result-type">📄</div>
+                          <div className="result-content">
+                            <div className="result-title">{item.title}</div>
+                            <div className="result-preview">{item.preview}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {/* Render Recent Conversations section */}
+                {groupedRecentItems.conversation && groupedRecentItems.conversation.length > 0 && (
+                  <div className="results-group">
+                    <h4 className="results-group-header">Recent Conversations</h4>
+                    <ul className="search-results-list">
+                      {groupedRecentItems.conversation.map((item) => (
+                        <li 
+                          key={item.id} 
+                          className="search-result-item"
+                          onClick={() => handleResultClick(item)}
+                        >
+                          <div className="result-type">💬</div>
+                          <div className="result-content">
+                            <div className="result-title">{item.title}</div>
+                            <div className="result-preview">{item.preview}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="search-placeholder">
+                No recent items found. Start typing to search.
+              </div>
+            )
           )}
         </div>
       )}
