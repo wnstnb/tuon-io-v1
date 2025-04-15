@@ -1122,7 +1122,7 @@ function EditorPageContent() {
     // --- Debug Logs Start ---
     if (process.env.NODE_ENV === 'development') {
       console.log('[Toast Effect Check]', {
-        isBottomPanelCollapsed,
+        isRightPanelCollapsed: !showRightPanel, // Changed check to !showRightPanel
         currentMessageCount,
         prevCount: prevMessagesCountRef.current,
         lastMessageRole: lastMessage?.role,
@@ -1130,16 +1130,16 @@ function EditorPageContent() {
     }
     // --- Debug Logs End ---
 
-    // Check if panel is collapsed, messages exist, count increased, and last message is from AI
+    // Check if the RIGHT panel is collapsed, messages exist, count increased, and last message is from AI
     if (
-      isBottomPanelCollapsed &&
+      !showRightPanel && // *** Changed condition to !showRightPanel ***
       messages &&
       currentMessageCount > prevMessagesCountRef.current &&
-      lastMessage?.role === 'assistant' // Use the lastMessage variable
+      lastMessage?.role === 'assistant'
     ) {
       // --- Debug Log Start ---
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Toast Effect] Conditions met. Showing toast.');
+        console.log('[Toast Effect] Conditions met (Right Panel Collapsed). Showing toast.'); // Updated log message
       }
       // --- Debug Log End ---
 
@@ -1156,7 +1156,7 @@ function EditorPageContent() {
     // Update the ref with the current count for the next render
     prevMessagesCountRef.current = currentMessageCount;
 
-  }, [currentConversation?.messages, isBottomPanelCollapsed]); // Depend on messages and collapsed state
+  }, [currentConversation?.messages, showRightPanel]); // *** Depend on showRightPanel instead of isBottomPanelCollapsed ***
   // --- End Toast Notification Effect ---
 
   // Function to handle layout changes in the vertical panel group
