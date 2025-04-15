@@ -27,6 +27,7 @@ import { Loader2 } from 'lucide-react';
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/react/style.css";
 import { ArtifactNotFoundError } from '../lib/services/ArtifactService';
+import { toast } from 'react-toastify';
 
 // Use dynamic import with SSR disabled for ThemeToggle
 const ThemeToggle = dynamic(
@@ -64,6 +65,9 @@ function EditorPageContent() {
   const [rightPanelSize, setRightPanelSize] = useState(20);
   const [isRightPanelAnimating, setIsRightPanelAnimating] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [bottomPanelSize, setBottomPanelSize] = useState(20);
+  const [isBottomPanelCollapsed, setIsBottomPanelCollapsed] = useState(false);
+  const [isBottomPanelAnimating, setIsBottomPanelAnimating] = useState(false);
 
   // -- NEW State Management --
   const [currentArtifactId, setCurrentArtifactId] = useState<string | undefined>(() => {
@@ -89,6 +93,10 @@ function EditorPageContent() {
 
   // Ref for PanelGroup imperative API
   const panelGroupRef = useRef<ImperativePanelGroupHandle>(null);
+  const verticalPanelGroupRef = useRef<ImperativePanelGroupHandle>(null);
+
+  // Ref to track previous message count for toast notifications
+  const prevMessagesCountRef = useRef<number>(0);
 
   // --- NEW: Calculate SyncStatus based on state --- //
   const getSaveStatus = useCallback((): SyncStatus => {
@@ -1070,30 +1078,6 @@ function EditorPageContent() {
     };
   }, [editorContent, handleContentChange, currentArtifactId, user?.id]); // Dependencies updated
 
-  // Show a loading state only if Supabase user data is still loading
-  if (isSupabaseLoading) {
-    return (
-      <div className="loading">
-        <Loader2 size={32} className="animate-spin" />
-      </div>
-    );
-  }
-
-  // --- UPDATED: Save Status Display Logic ---
-  const getSaveStatusMessage = (): string => {
-      if (lastSyncError) return `❌: ${lastSyncError}`;
-      if (isSyncing) return "☁️"; //Syncing to server...
-      if (isSyncPending) return "⏳"; //Changes saved locally, sync pending...
-      if (isDirty) return "💾"; // Indicates changes made, debounce timer running
-      if (!isDirty && !isSyncPending) return "✅"; // Idle state, fully synced
-      return ""; // Should ideally not happen
-  };
-
-  const getSaveStatusTitle = (): string => {
-      return `Dirty: ${isDirty} | Sync Pending: ${isSyncPending} | Syncing: ${isSyncing} | Persisted: ${isArtifactPersisted}`;
-  };
-  // --- END Save Status Display Logic ---
-
   // Log artifact ID updates when it changes
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT TRACKING] Current artifact ID changed to: ${currentArtifactId}`);
@@ -1128,6 +1112,116 @@ function EditorPageContent() {
     setIsDrawerOpen(open);
   };
   // --- END Drawer Handler ---
+
+  // --- Effect for AI Message Toast Notification ---
+  useEffect(() => {
+    const messages = currentConversation?.messages;
+    const currentMessageCount = messages?.length ?? 0;
+    const lastMessage = messages?.[currentMessageCount - 1];
+
+    // --- Debug Logs Start ---
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Toast Effect Check]', {
+        isBottomPanelCollapsed,
+        currentMessageCount,
+        prevCount: prevMessagesCountRef.current,
+        lastMessageRole: lastMessage?.role,
+      });
+    }
+    // --- Debug Logs End ---
+
+    // Check if panel is collapsed, messages exist, count increased, and last message is from AI
+    if (
+      isBottomPanelCollapsed &&
+      messages &&
+      currentMessageCount > prevMessagesCountRef.current &&
+      lastMessage?.role === 'assistant' // Use the lastMessage variable
+    ) {
+      // --- Debug Log Start ---
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Toast Effect] Conditions met. Showing toast.');
+      }
+      // --- Debug Log End ---
+
+      const lastMessageContent = lastMessage.content;
+      // Truncate long messages for the toast
+      const toastContent = lastMessageContent.length > 150
+        ? lastMessageContent.substring(0, 147) + '...'
+        : lastMessageContent;
+
+      // Display the toast
+      toast(toastContent);
+    }
+
+    // Update the ref with the current count for the next render
+    prevMessagesCountRef.current = currentMessageCount;
+
+  }, [currentConversation?.messages, isBottomPanelCollapsed]); // Depend on messages and collapsed state
+  // --- End Toast Notification Effect ---
+
+  // Function to handle layout changes in the vertical panel group
+  const handleVerticalLayout = useCallback((sizes: number[]) => {
+    if (sizes.length === 2) {
+      const currentBottomSize = sizes[1];
+      setBottomPanelSize(currentBottomSize); // Store the current size
+
+      // Determine collapsed state with a small threshold
+      const collapsed = currentBottomSize < 5; // Consider collapsed if less than 5%
+      if (collapsed !== isBottomPanelCollapsed) {
+        // --- Debug Log Start ---
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Layout Callback] Bottom panel collapsed state changing: ${isBottomPanelCollapsed} -> ${collapsed} (Size: ${currentBottomSize})`);
+        }
+        // --- Debug Log End ---
+        setIsBottomPanelCollapsed(collapsed);
+      }
+    }
+  }, [isBottomPanelCollapsed]);
+
+  // Function to toggle the bottom panel
+  const toggleBottomPanel = useCallback(() => {
+    const panelGroup = verticalPanelGroupRef.current;
+    if (!panelGroup) return;
+
+    setIsBottomPanelAnimating(true); // Start animation indication
+
+    if (isBottomPanelCollapsed) {
+      // Expand: Use stored size or a default if necessary
+      const targetSize = bottomPanelSize > 5 ? bottomPanelSize : 25; // Use stored or default 25%
+      panelGroup.setLayout([100 - targetSize, targetSize]);
+    } else {
+      // Collapse: Set bottom panel to 0
+      panelGroup.setLayout([100, 0]);
+    }
+
+    // Reset animation flag after transition likely finishes
+    setTimeout(() => setIsBottomPanelAnimating(false), 300); // Adjust timing as needed
+
+  }, [isBottomPanelCollapsed, bottomPanelSize]);
+
+  // Show a loading state only if Supabase user data is still loading
+  if (isSupabaseLoading) {
+    return (
+      <div className="loading">
+        <Loader2 size={32} className="animate-spin" />
+      </div>
+    );
+  }
+
+  // --- UPDATED: Save Status Display Logic ---
+  const getSaveStatusMessage = (): string => {
+      if (lastSyncError) return `❌: ${lastSyncError}`;
+      if (isSyncing) return "☁️"; //Syncing to server...
+      if (isSyncPending) return "⏳"; //Changes saved locally, sync pending...
+      if (isDirty) return "💾"; // Indicates changes made, debounce timer running
+      if (!isDirty && !isSyncPending) return "✅"; // Idle state, fully synced
+      return ""; // Should ideally not happen
+  };
+
+  const getSaveStatusTitle = (): string => {
+      return `Dirty: ${isDirty} | Sync Pending: ${isSyncPending} | Syncing: ${isSyncing} | Persisted: ${isArtifactPersisted}`;
+  };
+  // --- END Save Status Display Logic ---
 
   return (
     <main className="app-container">

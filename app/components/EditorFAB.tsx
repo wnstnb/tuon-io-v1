@@ -112,7 +112,7 @@ export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABPro
           aria-label="Create new artifact"
         >
           <FilePlus size={20} />
-          <span className="fab-tooltip">New Artifact</span>
+          <span className="fab-tooltip">New</span>
         </button>
         
         <button 

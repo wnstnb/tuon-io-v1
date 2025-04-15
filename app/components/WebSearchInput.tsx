@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { SearchResult } from '../context/AIContext';
 import { supabase } from '../lib/supabase';
+import type { ExaSearchFullResponse } from '../lib/services/SearchService';
 
 interface WebSearchInputProps {
   onSearchComplete?: (results: SearchResult[], query: string) => void;
@@ -31,7 +32,10 @@ export default function WebSearchInput({ onSearchComplete }: WebSearchInputProps
 
       // 1. Perform the web search using the SearchService
       const { SearchService } = await import('../lib/services/SearchService');
-      const searchResults = await SearchService.search(query, 5);
+      const searchResults = await SearchService.search(query, 5) as SearchResult[];
+      
+      // Get the full response for storage
+      const fullSearchResponse = await SearchService.search(query, 5, true) as ExaSearchFullResponse;
 
       // 2. Save the search to Supabase via the API
       const saveResponse = await fetch('/api/web-search', {
@@ -42,7 +46,7 @@ export default function WebSearchInput({ onSearchComplete }: WebSearchInputProps
         },
         body: JSON.stringify({
           query: query,
-          results: searchResults,
+          results: fullSearchResponse,
           search_provider: 'ExaSearch',
         }),
       });

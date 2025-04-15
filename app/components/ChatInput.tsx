@@ -1,9 +1,13 @@
 'use client';
 
 import React, { useState, FormEvent, useRef, useEffect } from 'react';
-import { Send, Image, Search } from 'lucide-react';
-import { useAI, EditorContext, SearchOptions } from '../context/AIContext';
+import { Send, Image, Search, Sparkles } from 'lucide-react';
+import { useAI, EditorContext } from '../context/AIContext';
+import ModelSelector from './ModelSelector';
 import { Block } from '@blocknote/core';
+
+// Define search type (can be shared)
+type SearchType = 'web' | 'exaAnswer';
 
 // Optional prop to receive editor context from parent components
 interface ChatInputProps {
@@ -17,7 +21,7 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
   const { sendMessage, isLoading } = useAI();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchType, setSearchType] = useState<SearchType>('web');
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -164,7 +168,7 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    console.log('ChatInput: handleSubmit called, event.preventDefault() executed.');
+    console.log('ChatInput: handleSubmit called.');
     
     if ((!message.trim() && !selectedImage) || isLoading) return;
     
@@ -183,35 +187,25 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     const enhancedEditorContext: EditorContext = {
       ...initialEditorContext,
       markdown: editorMarkdown,
-      selectedBlockIds: selectedBlockIds, // Add selected block IDs
+      selectedBlockIds: selectedBlockIds,
     };
     
-    // Check if this is a search request (starts with /search)
-    const isSearchRequest = userMessage.trim().startsWith('/search');
-    
-    // *** Log before calling sendMessage ***
-    console.log('ChatInput: Preparing to call sendMessage.', { hasImage: !!selectedImage, isSearch: isSearchRequest, message: userMessage });
+    console.log(`ChatInput: Preparing to call sendMessage. Search Type: ${searchType}`, { hasImage: !!selectedImage, message: userMessage });
 
-    // Handle message with image
+    // Handle message with image OR normal message
+    const imageDataUrl = selectedImage ? imagePreview : null;
     if (selectedImage) {
-      const imageDataUrl = imagePreview;
       clearSelectedImage();
-      // Pass the context with markdown
-      await sendMessage(userMessage, imageDataUrl, enhancedEditorContext);
-    } else if (isSearchRequest) {
-      // Extract the search query (everything after /search)
-      const searchQuery = userMessage.trim().substring('/search'.length).trim();
-      if (searchQuery) {
-        // Call sendMessage with search flag, query, and context with markdown
-        await sendMessage(userMessage, null, enhancedEditorContext, { isSearch: true, searchQuery });
-      } else {
-        // Empty search query, handle as normal message with context
-        await sendMessage(userMessage, null, enhancedEditorContext);
-      }
-    } else {
-      // Normal message (not search) with context
-      await sendMessage(userMessage, null, enhancedEditorContext);
     }
+    
+    // Call sendMessage, always passing the current searchType
+    await sendMessage(
+      userMessage, 
+      imageDataUrl, 
+      enhancedEditorContext, 
+      searchType
+    );
+
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -222,22 +216,14 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
     }
   };
 
-  // Check for search mode when message changes
-  useEffect(() => {
-    setIsSearchMode(message.trim().startsWith('/search'));
-  }, [message]);
+  // Toggle Search Type Function
+  const toggleSearchType = () => {
+    setSearchType(currentType => currentType === 'web' ? 'exaAnswer' : 'web');
+  };
 
   return (
-    <div className={`chat-input-container ${isSearchMode ? 'search-mode' : ''}`}>
+    <div className="chat-input-container">
       <form onSubmit={handleSubmit} className="chat-input-form">
-        {/* Display search indicator when in search mode */}
-        {isSearchMode && (
-          <div className="search-indicator">
-            <Search size={16} />
-            <span>Web Search Mode</span>
-          </div>
-        )}
-        
         {/* Selected image preview */}
         {imagePreview && (
           <div className="image-preview-container">
@@ -252,7 +238,8 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
             </button>
           </div>
         )}
-        <div className="input-wrapper">
+        {/* New wrapper for textarea and buttons */}
+        <div className="chat-input-field-area">
           <div className="textarea-container">
             <textarea
               ref={textareaRef}
@@ -266,32 +253,49 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
             />
           </div>
           <div className="input-buttons">
-            <button 
-              type="button" 
-              onClick={() => fileInputRef.current?.click()}
-              className="image-button"
-              disabled={isLoading}
-              aria-label="Upload image"
-            >
-              <Image size={18} />
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*"
-              style={{ display: 'none' }}
-            />
-            <button 
-              type="submit" 
-              disabled={(!message.trim() && !selectedImage) || isLoading}
-              className="send-button"
-              aria-label="Send message"
-            >
-              <Send size={18} />
-            </button>
+            {/* Add ModelSelector to the left */}
+            <div className="model-selector-wrapper">
+              <ModelSelector />
+            </div>
+            {/* Existing buttons moved to their own wrapper for alignment */}
+            <div className="action-buttons-wrapper">
+              <button 
+                type="button" 
+                onClick={toggleSearchType}
+                className={`search-type-toggle-button ${searchType}`}
+                disabled={isLoading}
+                aria-label={`Toggle search mode (Current: ${searchType === 'web' ? 'Web Search' : 'Exa Answer'})`}
+                title={`Current mode: ${searchType === 'web' ? 'Web Search' : 'Exa Answer (AI Answer)'}`}
+              >
+                {searchType === 'web' ? <Search size={18} /> : <Sparkles size={18} />}
+              </button>
+              <button 
+                type="button" 
+                onClick={() => fileInputRef.current?.click()}
+                className="image-button"
+                disabled={isLoading}
+                aria-label="Upload image"
+              >
+                <Image size={18} />
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                style={{ display: 'none' }}
+              />
+              <button 
+                type="submit" 
+                disabled={(!message.trim() && !selectedImage) || isLoading}
+                className="send-button"
+                aria-label="Send message"
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
-        </div>
+        </div> {/* End of new chat-input-field-area */}
       </form>
     </div>
   );

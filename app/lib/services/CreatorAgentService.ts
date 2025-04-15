@@ -3,6 +3,7 @@ import { OpenAI } from 'openai';
 import { Block } from '@blocknote/core';
 import { UserService } from './UserService';
 import { AIModelType } from '../../context/AIContext';
+import type { SearchService as SearchServiceType, SearchResult, ExaSearchFullResponse } from './SearchService';
 
 /**
  * Interface for the response from the creator agent
@@ -10,6 +11,11 @@ import { AIModelType } from '../../context/AIContext';
 export interface CreatorAgentResponse {
   chatContent: string;
   editorContent?: string;
+  searchData?: {
+    query: string;
+    results: any; // Can be SearchResult[] or ExaAnswerResponse
+    provider: SearchType;
+  } | null;
 }
 
 /**
@@ -22,6 +28,9 @@ export interface IntentAnalysisResult {
   needsWebSearch?: boolean;
   searchQuery?: string;
 }
+
+// Add this type definition at the top level if it doesn't exist elsewhere
+export type SearchType = 'web' | 'exaAnswer';
 
 /**
  * Service for the creator agent that determines whether to keep the conversation in the chat
@@ -70,6 +79,7 @@ export class CreatorAgentService {
    * @param currentUserImageUrl Optional: The storage path of the image uploaded with the CURRENT user input
    * @param editorMarkdownContent Optional current editor markdown content for context-aware operations
    * @param currentModel Optional current model for context-aware operations
+   * @param searchType Optional: Specify the type of web search to perform
    * @returns Response with content for chat and/or editor
    */
   static async processRequest(
@@ -78,11 +88,12 @@ export class CreatorAgentService {
     conversationHistory: any[] = [],
     currentUserImageUrl?: string | null,
     editorMarkdownContent?: string,
-    currentModel?: AIModelType
+    currentModel?: AIModelType,
+    searchType?: SearchType
   ): Promise<CreatorAgentResponse> {
     this.initializeClients();
     
-    console.log('CreatorAgentService: Processing request based on intent analysis');
+    console.log(`CreatorAgentService: Processing request. Intent: ${intentAnalysis.destination}, Search Type: ${searchType || 'N/A'}`);
     if (currentUserImageUrl) {
         console.log(`CreatorAgentService: Current request includes image path: ${currentUserImageUrl}`);
     }
@@ -90,50 +101,123 @@ export class CreatorAgentService {
       console.log(`CreatorAgentService: Editor content provided (${editorMarkdownContent.length} characters)`);
     }
     
+    let searchDataForSaving: CreatorAgentResponse['searchData'] = null;
+    
     try {
-      // Check if we already have search results in the conversation history
       const hasSearchResults = conversationHistory.some(
-        msg => msg.role === 'system' && msg.content.includes('Search results for')
+        msg => msg.role === 'system' && (msg.content.includes('Search results for') || msg.content.includes('Context from Exa Answer search'))
       );
       
-      // Skip search if we already have search results or if intent analysis has already handled it
-      const needsWebSearch = !hasSearchResults && this.shouldPerformWebSearch(userInput, intentAnalysis);
-      let searchResults = null;
-      
-      // Perform web search if needed, regardless of destination
-      if (needsWebSearch) {
+      // Determine if search is needed
+      // Use intentAnalysis first, then explicit searchType, then fall back to shouldPerformWebSearch heuristic
+      let needsSearch = false;
+      let effectiveSearchType: SearchType = searchType || 'web'; // Default to web if not specified
+      let searchQuery = intentAnalysis.searchQuery || this.extractSearchQuery(userInput);
+
+      if (intentAnalysis.needsWebSearch) {
+        needsSearch = true;
+        // If intent analysis triggered search, respect the passed searchType if available
+        effectiveSearchType = searchType || 'web'; 
+        console.log('CreatorAgentService: Intent analysis determined web search needed.');
+      } else if (searchType === 'exaAnswer') {
+         // If user explicitly selected Exa Answer via UI toggle, trigger search
+         needsSearch = true;
+         effectiveSearchType = 'exaAnswer';
+         console.log('CreatorAgentService: Explicit Exa Answer search type selected.');
+      } else {
+         // Fallback: check heuristic if no intent match or explicit toggle
+         needsSearch = this.shouldPerformWebSearch(userInput, intentAnalysis);
+         effectiveSearchType = 'web'; // Default to web search for heuristic matches
+         if(needsSearch) {
+            console.log('CreatorAgentService: Heuristic determined web search needed.');
+         }
+      }
+
+      // Skip search if results already present in history
+      if (hasSearchResults) {
+          needsSearch = false;
+          console.log('CreatorAgentService: Search results already present in history, skipping search.');
+      }
+
+      // Perform search if needed
+      if (needsSearch && searchQuery) {
         try {
-          console.log('CreatorAgentService: Detected web search request, performing search');
-          
-          // Dynamically import SearchService to avoid circular dependencies
-          const { SearchService } = await import('./SearchService');
-          
-          // Extract the search query
-          const searchQuery = intentAnalysis.searchQuery || this.extractSearchQuery(userInput);
-          console.log(`CreatorAgentService: Searching for "${searchQuery}"`);
-          
-          // Perform the search (limit to 5 results)
-          searchResults = await SearchService.search(searchQuery, 5);
-          console.log(`CreatorAgentService: Found ${searchResults.length} search results`);
-          
-          // Log search mode
-          const searchMode = intentAnalysis.destination === 'EDITOR' ? 'EDITOR' : 'CONVERSATION';
-          console.log(`CreatorAgentService: Search performed for ${searchMode} mode`);
-          
-          // Format search results for inclusion in the prompt
-          const formattedResults = SearchService.formatResults(searchResults);
-          
-          // Add search results to conversation history for context
-          if (searchResults.length > 0) {
-            // Add as system message to conversation history
-            conversationHistory.push({
-              role: 'system',
-              content: `Search results for "${searchQuery}":\n\n${formattedResults}`
-            });
+          console.log(`CreatorAgentService: Performing ${effectiveSearchType} search for "${searchQuery}"`);
+          const { SearchService } = await import('./SearchService') as { SearchService: typeof SearchServiceType };
+
+          if (effectiveSearchType === 'exaAnswer') {
+            // --- Exa Answer Search --- 
+            const exaAnswerResult = await SearchService.performExaAnswerSearch(searchQuery);
+            
+            // Check if we got a valid response object
+            if (exaAnswerResult && exaAnswerResult.answer) { 
+              console.log(`CreatorAgentService: Received Exa Answer object.`);
+              
+              // Format the answer string and citations into the context message
+              let formattedAnswerContext = `Context from Exa Answer search for "${searchQuery}":\n\nAnswer: ${exaAnswerResult.answer}`;
+              
+              // Add citations if they exist
+              if (exaAnswerResult.citations && exaAnswerResult.citations.length > 0) {
+                formattedAnswerContext += `\n\nSources:\n`;
+                formattedAnswerContext += exaAnswerResult.citations.map((c, i) => 
+                  `[${i + 1}] ${c.title || 'Source'} (${c.url})`
+                ).join('\n');
+              }
+
+              // Add Exa Answer context to conversation history
+              conversationHistory.push({
+                role: 'system',
+                content: formattedAnswerContext
+              });
+              console.log('CreatorAgentService: Added Exa Answer context (with citations) to history.');
+              searchDataForSaving = {
+                query: searchQuery,
+                results: exaAnswerResult,
+                provider: 'exaAnswer'
+              };
+            } else {
+              console.log('CreatorAgentService: Exa Answer search returned null or invalid structure.');
+              // Optionally add a system message indicating no answer was found
+              conversationHistory.push({
+                   role: 'system',
+                   content: `[System Note: Exa Answer search for "${searchQuery}" did not return a valid answer.]`
+               });
+            }
+          } else {
+            // --- Standard Web Search --- 
+            const webSearchResults = await SearchService.search(searchQuery, 5) as SearchResult[];
+            console.log(`CreatorAgentService: Found ${webSearchResults.length} standard web search results`);
+
+            if (webSearchResults.length > 0) {
+              // Format standard web search results
+              const formattedResults = SearchService.formatResults(webSearchResults);
+
+              // Add standard search results to conversation history
+              conversationHistory.push({
+                role: 'system',
+                content: `Search results for "${searchQuery}":\n\n${formattedResults}`
+              });
+              console.log('CreatorAgentService: Added standard web search results to history.');
+              
+              // Also get the full response for storage
+              const fullWebSearchResponse = await SearchService.search(searchQuery, 5, true) as ExaSearchFullResponse;
+              
+              searchDataForSaving = {
+                query: searchQuery,
+                results: fullWebSearchResponse,
+                provider: 'web'
+              };
+            } else {
+               console.log('CreatorAgentService: Standard web search returned no results.');
+            }
           }
         } catch (error) {
-          console.error('CreatorAgentService: Error performing web search:', error);
-          // Continue without search results if there's an error
+          console.error(`CreatorAgentService: Error performing ${effectiveSearchType} search:`, error);
+          // Add error message to history?
+           conversationHistory.push({
+               role: 'system',
+               content: `[System Note: Failed to perform ${effectiveSearchType} search for "${searchQuery}". Proceeding without search results.]`
+           });
         }
       }
       
@@ -425,7 +509,11 @@ export class CreatorAgentService {
       }
 
       console.log('CreatorAgentService: Successfully processed request.');
-      return { chatContent: chatResponse, editorContent: editorResponse };
+      return { 
+        chatContent: chatResponse, 
+        editorContent: editorResponse, 
+        searchData: searchDataForSaving
+      };
     } catch (error: any) {
       console.error('CreatorAgentService: Error processing request:', error);
       // Log specific details for debugging
@@ -441,7 +529,8 @@ export class CreatorAgentService {
 
       return {
         chatContent: `I apologize, but I encountered an error while processing your request (${error.message || 'Unknown Error'}). Please check the console or contact support if the issue persists.`,
-        editorContent: undefined
+        editorContent: undefined,
+        searchData: null
       };
     }
   }
@@ -559,40 +648,24 @@ export class CreatorAgentService {
   }
 
   /**
-   * Determines if a web search should be performed based on user input
+   * Determines if a web search *should* be performed based on user input heuristic
+   * This is now primarily a fallback if intent analysis doesn't specify and no explicit search type is set.
    * @param userInput The user's input text
-   * @param intentAnalysis Optional intent analysis result 
-   * @returns Boolean indicating if a search should be performed
+   * @param intentAnalysis Optional intent analysis result
+   * @returns Boolean indicating if a heuristic search check passes
    */
   private static shouldPerformWebSearch(userInput: string, intentAnalysis?: IntentAnalysisResult): boolean {
-    // First priority: Check if intent analysis detected a need for web search
-    if (intentAnalysis && intentAnalysis.needsWebSearch === true) {
-      console.log('CreatorAgentService: Intent analysis indicates a need for web search');
-      return true;
-    }
-    
-    // Check for explicit search command
-    if (userInput.trim().startsWith('/search')) {
-      return true;
-    }
-    
-    // Define patterns that indicate a search request
+    // Remove explicit /search check here as it's handled by the main logic
+    // if (userInput.trim().startsWith('/search')) {
+    //   return true;
+    // }
+
+    // Keep heuristic checks
     const searchIndicators = [
       /what (is|are|do you know about) .+\??/i,
-      /tell me about .+/i,
-      /how (to|do|does|can) .+\??/i,
-      /who (is|was|are) .+\??/i,
-      /where (is|can|are) .+\??/i,
-      /when (is|was|did) .+\??/i,
-      /why (is|are|does) .+\??/i,
-      /search for .+/i,
-      /find .+ (information|details|about)/i,
-      /look up .+/i,
-      /can you find .+\??/i,
+      // ... other indicators
       /give me information (about|on) .+/i
     ];
-    
-    // Check if any of the patterns match
     return searchIndicators.some(pattern => pattern.test(userInput));
   }
 

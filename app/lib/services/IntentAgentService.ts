@@ -191,12 +191,12 @@ Also determine if the request would benefit from a web search:
 
 ### Operation Classification:
 If you determine the destination is EDITOR, also classify the specific operation:
-* CREATE: Generate entirely new content with no reference to existing content.
-* MODIFY: Change, update, or enhance existing content while preserving its overall structure.
+* MODIFY: Change, update, append, add to or enhance existing content while preserving its overall structure.
 * EXPAND: Add to or elaborate on a specific section of existing content.
 * REPLACE: Completely replace existing content with new content.
 * REFORMAT: Change the formatting or organization without substantial content changes.
 * DELETE: Remove specific content.
+* CREATE: Generate **ENTIRELY NEW CONTENT** with **NO REFERENCES TO EXISTING CONTENT**.
 
 ### Ambiguity Handling:
 * If the user asks *how* to do something (e.g., "How do I make a list?"), lean towards **CONVERSATION**.

@@ -201,7 +201,9 @@ p {
   box-shadow: none;
   overflow-x: auto;
   overflow-y: auto;
-  min-height: 0; /* Allow proper flexbox scrolling behavior */
+  /* min-height: 0; Allow proper flexbox scrolling behavior */
+  min-height: 400px; /* Ensure minimum height for dropdown visibility */
+
 }
 
 header {
@@ -594,7 +596,7 @@ h1 {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;  /* Thin visible line */
+  width: 0;  /* Thin visible line */
   left: 50%;
   transform: translateX(-50%);
   background-color: var(--border-color);
@@ -721,16 +723,17 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px;
+  padding: 6px;
   border-bottom: 1px solid var(--border-color);
-  gap: 10px;
+  gap: 6px;
   flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .header-button-container {
   flex: 1;
-  max-width: 50%;
   display: flex;
+  width: 100%;
+  padding: 0 6px;
 }
 
 /* Chat Messages */
@@ -771,56 +774,30 @@ h1 {
   flex-direction: column;
   padding: 0.75rem;
   background-color: var(--bg-color);
-  border-top: 1px solid var(--border-color);
+  border-top: none;
   position: relative;
   flex-shrink: 0; /* Prevent shrinking when in flex column */
 }
 
-/* Search mode indicator */
-.chat-input-container.search-mode textarea {
-  border-color: var(--link-color);
-}
-
-.search-indicator {
+/* New styles for the inner field area */
+.chat-input-field-area {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  margin-bottom: 0.5rem;
-  border-radius: 0.375rem;
-  background-color: var(--bg-color-tertiary);
-  border: 1px solid var(--link-color);
-  color: var(--link-color);
-  font-size: 0.875rem;
-  font-weight: 600;
+  flex-direction: column; /* Stack textarea and buttons vertically */
+  border: 1px solid var(--border-color);
+  border-radius: 12px; /* Rounded corners */
+  background-color: var(--input-bg);
+  padding: 4px; /* Small padding around the area */
+  overflow: hidden; /* Ensure children conform to rounded corners */
 }
 
-.chat-input-form {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-
-.input-wrapper {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  width: 100%;
-}
-
-.textarea-container {
-  position: relative;
-  width: 100%;
-  flex: 1;
-}
-
+/* Remove border from textarea as it's now on the parent */
 .chat-textarea {
   width: 100%;
   resize: none;
   overflow-y: hidden;
   padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+  border-radius: 8px; /* Optional: slightly rounded corners inside */
+  border: none; /* Explicitly remove border */
   background-color: var(--input-bg);
   color: var(--text-color);
   font-size: 14px;
@@ -831,7 +808,7 @@ h1 {
 
 .chat-textarea:focus {
   outline: none;
-  border-color: var(--accent-color);
+  /* border-color: var(--accent-color); */ /* Removed focus border */
 }
 
 .chat-textarea::placeholder {
@@ -840,10 +817,28 @@ h1 {
 
 .input-buttons {
   display: flex;
-  gap: 4px;
+  gap: 8px; /* Increased gap slightly */
+  justify-content: space-between; /* Push items to ends */
+  align-items: center; /* Vertically align items */
+  padding: 4px 8px; /* Padding for the button row */
+  width: 100%; /* Ensure it takes full width */
 }
 
-.send-button, .image-button {
+/* Wrapper for the model selector */
+.model-selector-wrapper {
+  display: flex;
+  /* Let it take available space if needed, but keep it left */
+}
+
+/* Wrapper for the action buttons (Search, Image, Send) */
+.action-buttons-wrapper {
+  display: flex;
+  gap: 4px; /* Keep original gap for these buttons */
+  /* Aligned to the right by default due to space-between on parent */
+}
+
+/* Adjust button appearance slightly */
+.send-button, .image-button, .search-type-toggle-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1039,11 +1034,12 @@ h1 {
   border-radius: 8px;
   background-color: var(--input-bg);
   color: var(--text-color);
-  border: 1px solid var(--border-color);
-  font-size: 0.85rem;
+  border: 0px solid var(--border-color);
+  font-size: 0.75rem;
+  font-family: 'JetBrains Mono', monospace;
   cursor: pointer;
-  height: 38px;
-  text-align: center;
+  height: 30px;
+  text-align: left; /* Changed from center to left */
 }
 
 .model-select:focus {
@@ -1054,6 +1050,7 @@ h1 {
 .model-select option {
   background-color: var(--input-bg);
   color: var(--text-color);
+  text-align: left; /* Added explicit left alignment for options */
 }
 
 /* Chat History */
@@ -1070,15 +1067,15 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background-color: var(--accent-color);
   color: white;
   cursor: pointer;
   transition: background-color 0.2s;
-  height: 38px;
   width: 100%;
+  height: auto;
 }
 
 .new-chat-button:hover {
@@ -2646,9 +2643,44 @@ html.dark .ai-status-indicator {
   /* Maybe slightly less max height? */
 }
 
+.pinned-chat-toast {
+  position: fixed;
+  bottom: 80px; /* Adjust based on pinned input height */
+  right: 20px;
+  background-color: var(--card); /* Or your preferred background */
+  color: var(--card-foreground);
+  padding: 10px 15px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  z-index: 1000; /* Ensure it overlays other content */
+  max-width: 300px;
+  transition: opacity 0.3s ease-in-out;
+  opacity: 1;
+}
+
+.pinned-chat-toast .loading-content {
+  display: flex;
+  align-items: center;
+}
+
+.pinned-chat-toast .toast-message {
+  margin: 0;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Add styles for hidden state if needed, e.g., for animations */
+/* .pinned-chat-toast.hidden {
+  opacity: 0;
+  pointer-events: none;
+} */
+
+
 /* Adjust main content padding when input is pinned */
 .main-content-padded-bottom {
-  padding-bottom: 100px; /* Adjust based on pinned input height */
+  padding-bottom: 148px !important; /* Adjust based on pinned input height */
 }
 
 /* Hide the original chat input wrapper when the panel is collapsed */
@@ -2662,9 +2694,45 @@ html.dark .ai-status-indicator {
   flex-direction: column;
   padding: 0.75rem;
   background-color: var(--bg-color);
-  border-top: 1px solid var(--border-color);
+  border-top: none;
   position: relative;
   flex-shrink: 0; /* Prevent shrinking when in flex column */
+}
+
+/* Style for the search type toggle button (needs to be defined) */
+.search-type-toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+  color: var(--text-color-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.search-type-toggle-button:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-color);
+}
+
+.search-type-toggle-button:disabled {
+  background-color: var(--disabled-bg);
+  cursor: not-allowed;
+  color: var(--text-color-disabled);
+  border-color: var(--disabled-bg);
+}
+
+/* Make sure the original input-wrapper (if still used elsewhere) is handled */
+.input-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
 }
 
 /* --- Editor --- */

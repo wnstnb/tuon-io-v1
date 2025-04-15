@@ -29,9 +29,12 @@ export default function ChatInterface() {
             <span>New</span>
           </button>
         </div>
+        {/* Remove the ModelSelector and its container div from here */}
+        {/*
         <div className="header-button-container">
           <ModelSelector />
         </div>
+        */}
       </div>
       
       {/* Chat messages are always rendered now (if data exists) */}

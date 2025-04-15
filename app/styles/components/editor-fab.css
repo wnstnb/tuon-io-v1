@@ -10,6 +10,11 @@
   align-items: flex-end;
 }
 
+/* Adjust FAB position when chat input is pinned */
+.pinned-chat-input-container ~ .fab-container {
+  bottom: 60px; /* Move higher when chat input is pinned */
+}
+
 .fab-main {
   width: 60px;
   height: 60px;
