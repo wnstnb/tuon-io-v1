@@ -13,6 +13,7 @@ interface SearchResult {
   title: string;
   type: 'artifact' | 'conversation';
   preview?: string;
+  hasContent: boolean;
 }
 
 export default function GlobalSearch() {
@@ -87,7 +88,8 @@ export default function GlobalSearch() {
         id: artifact.id,
         title: artifact.title || 'Untitled Artifact',
         type: 'artifact' as const,
-        preview: artifact.preview || 'No preview available'
+        preview: artifact.preview || 'No preview available',
+        hasContent: true // Artifacts always have content
       }));
       
       // Add matching conversations
@@ -100,8 +102,17 @@ export default function GlobalSearch() {
           type: 'conversation' as const,
           preview: conversation.messages && conversation.messages.length > 0 
             ? conversation.messages[0].content.substring(0, 60) + '...' 
-            : 'Empty conversation'
-        }));
+            : 'Empty conversation',
+          hasContent: (conversation.messages && conversation.messages.length > 0) ? true : false
+        }))
+        // Sort conversations to prioritize those with content
+        .sort((a, b) => {
+          // First sort by content (non-empty first)
+          if (a.hasContent && !b.hasContent) return -1;
+          if (!a.hasContent && b.hasContent) return 1;
+          // Then sort alphabetically by title
+          return a.title.localeCompare(b.title);
+        });
       
       setResults([...artifactResults, ...conversationResults]);
     } catch (error) {
@@ -175,20 +186,30 @@ export default function GlobalSearch() {
         id: artifact.id,
         title: artifact.title,
         type: 'artifact' as const,
-        preview: artifact.preview
+        preview: artifact.preview,
+        hasContent: true // Artifacts always have content
       }));
 
       // Get recent conversations (already sorted by update time in useAI hook? Assuming yes)
       const recentConversations = conversationHistory
-        .slice(0, 5)
         .map(conversation => ({
           id: conversation.id,
           title: conversation.title,
           type: 'conversation' as const,
           preview: conversation.messages && conversation.messages.length > 0
             ? conversation.messages[0].content.substring(0, 60) + '...'
-            : 'Empty conversation'
-        }));
+            : 'Empty conversation',
+          hasContent: (conversation.messages && conversation.messages.length > 0) ? true : false
+        }))
+        // Sort to prioritize conversations with content
+        .sort((a, b) => {
+          // First sort by content (non-empty first)
+          if (a.hasContent && !b.hasContent) return -1;
+          if (!a.hasContent && b.hasContent) return 1;
+          // Then maintain original order (which should be by recent update)
+          return 0;
+        })
+        .slice(0, 5); // Take top 5 after sorting
 
       setRecentItems([...artifactResults, ...recentConversations]);
     } catch (error) {

@@ -9,6 +9,7 @@
   --accent-color: #FAD89D; /* Golden Sand */
   --text-color: #0F1317; /* Midnight Slate - for contrast */
   --muted-text-color: #3F4F60; /* Moonlit Azure - for readable muted text */
+  --title-color: #0F1317; /* Midnight Slate - for contrast */
   --border-color: #96A2B4; /* Blue Pearl */
   --header-bg: #D9DDE2; /* Silver Fog */
   --editor-bg: #F6F8FA; /* Cloud Mist */
@@ -55,6 +56,7 @@
   --background-rgb: 15, 19, 23;  /* Midnight Slate #0F1317 */
   --primary-color: #C79553;  /* Ember Gold */
   --secondary-color: #C79553; /* Ember Gold */
+  --title-color: #E5B679; /* White */
   --accent-color: #F1C37D; /* Luminous Amber */
   --text-color: #FFFFFF; /* White */
   --muted-text-color: #A8ADB4; /* Keeping Frost Gray for readability */
@@ -151,6 +153,10 @@ p {
   color: var(--primary-color);
 }
 
+.text-primary-dark {
+  color: var(--primary-color-dark);
+}
+
 .text-secondary {
   color: var(--text-color-secondary);
 }
@@ -218,12 +224,12 @@ header {
 }
 
 .header-content {
-  display: grid;
-  grid-template-columns: 0.5fr 2fr 0.5fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0;
-  margin: 0;
+  padding: 0 1rem; /* Add some horizontal padding */
+  height: 60px; /* Ensure header has a consistent height */
 }
 
 h1 {
@@ -332,7 +338,7 @@ h1 {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  max-width: 80%;
+  max-width: 100%;
   margin: 0 auto;
   overflow: hidden; /* Prevent scrolling at container level */
 }
@@ -726,7 +732,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   padding: 6px;
-  border-bottom: 1px solid var(--border-color);
+  /* border-bottom: 0px solid var(--border-color); */
   gap: 6px;
   flex-shrink: 0; /* Prevent header from shrinking */
 }
@@ -979,16 +985,17 @@ h1 {
 
 /* Add a bit more padding to the user/assistant messages to help distinguish them */
 .user-message .message-bubble {
-  background-color: var(--accent-color-light);
-  border: 1px solid var(--accent-color-light);
+  background-color: var(--message-bg);
+  border: 1px solid var(--border-color);
+  /* border: 1px solid var(--accent-color-light); */
   margin-left: auto; /* Push user messages to the right */
   max-width: 85%; /* Limit width for better readability */
   border-radius: 12px 12px 0 12px; /* Rounded corners with point at bottom left */
 }
 
 .assistant-message .message-bubble {
-  background-color: var(--message-bg);
-  border: 1px solid var(--border-color);
+  /* background-color: var(--message-bg); */
+  /* border: 1px solid var(--border-color); */
   max-width: 85%; /* Limit width for better readability */
   border-radius: 12px 12px 12px 0; /* Rounded corners with point at bottom right */
 }
@@ -1289,12 +1296,12 @@ h1 {
 
 /* Header styles */
 .header-content {
-  display: grid;
-  grid-template-columns: 0.5fr 2fr 0.5fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0;
-  margin: 0;
+  padding: 0 0rem; /* Add some horizontal padding */
+  height: 60px; /* Ensure header has a consistent height */
 }
 
 .header-actions {
@@ -1306,7 +1313,7 @@ h1 {
 }
 
 .sign-out-button {
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.5rem;
   background-color: transparent;
   color: var(--text-color);
   border: 1px solid var(--border-color);
@@ -1854,12 +1861,12 @@ h1 {
 
 /* Header styles */
 .header-content {
-  display: grid;
-  grid-template-columns: 0.5fr 2fr 0.5fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0;
-  margin: 0;
+  padding: 0 1rem; /* Add some horizontal padding */
+  height: 60px; /* Ensure header has a consistent height */
 }
 
 /* Update search query styles to work as a button */
@@ -2171,8 +2178,8 @@ input[type="range"]::-webkit-slider-runnable-track {
   background-color: var(--bg-color);
   border-radius: 6px;
   border: 1px solid var(--border-color);
-  max-width: 70%;
-  width: 50%;
+  /* max-width: 70%; */
+  width: 100%;
   position: relative;
   margin: 0;
   justify-self: center;
@@ -2331,12 +2338,12 @@ input[type="range"]::-webkit-slider-runnable-track {
 
 /* Header styles */
 .header-content {
-  display: grid;
-  grid-template-columns: 0.5fr 2fr 0.5fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0;
-  margin: 0;
+  padding: 0 1rem; /* Add some horizontal padding */
+  height: 60px; /* Ensure header has a consistent height */
 }
 
 /* BlockNote editor custom styles */
@@ -2862,4 +2869,15 @@ a:hover {
 .link:hover {
   color: var(--accent-color);
   text-decoration: underline;
+}
+
+/* Selection highlight styles */
+::selection {
+  background-color: #C79553;
+  color: white;
+}
+
+[data-theme='dark'] ::selection {
+  background-color: #C79553;
+  color: white;
 }

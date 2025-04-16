@@ -8,6 +8,7 @@ import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import MenuIcon from '@mui/icons-material/Menu';
+import { Newsreader } from 'next/font/google';
 import Editor from '../components/Editor';
 import EditorFAB from '../components/EditorFAB';
 import TitleBar from '../components/TitleBar';
@@ -28,6 +29,14 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/react/style.css";
 import { ArtifactNotFoundError } from '../lib/services/ArtifactService';
 import { toast } from 'react-toastify';
+import Image from 'next/image';
+
+// Initialize the Newsreader font
+const newsreader = Newsreader({ 
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  display: 'swap',
+});
 
 // Use dynamic import with SSR disabled for ThemeToggle
 const ThemeToggle = dynamic(
@@ -1237,10 +1246,9 @@ function EditorPageContent() {
               >
                  <MenuIcon />
               </IconButton>
-              <span className="font-jetbrains-mono text-lg ml-2">tuon.io</span>
+              <span className={`${newsreader.className} text-xl text-primary ml-2`}
+              style={{ color: 'var(--title-color)', fontWeight: 'bold', fontSize: '24px' }}>tuon.io</span>
           </div>
-          
-          <GlobalSearch />
           
           <div className="header-actions flex items-center">
             <button onClick={() => signOut()} className="sign-out-button mr-2">
@@ -1257,31 +1265,42 @@ function EditorPageContent() {
         onClose={toggleDrawer(false)}
         PaperProps={{
           sx: {
-            backgroundColor: 'var(--background)',
-            color: 'var(--foreground)',
+            backgroundColor: 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
             fontFamily: '"JetBrains Mono", monospace',
-            borderRight: '1px solid var(--border)',
+            borderRight: '1px solid var(--border-color)',
             padding: '12px 0',
             '& .MuiBackdrop-root': {
               backgroundColor: 'var(--background-50)'
             }
           }
         }}
+        BackdropProps={{
+          sx: {
+            backgroundColor: 'var(--overlay-bg)',
+          }
+        }}
+        className="file-explorer-drawer"
       >
         <Box
           sx={{ 
-            width: 250, 
+            width: 360, 
             height: '100%', 
             display: 'flex', 
             flexDirection: 'column',
-            backgroundColor: 'var(--background)',
-            color: 'var(--foreground)',
+            backgroundColor: 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
             fontFamily: '"JetBrains Mono", monospace',
-            paddingRight: '8px'
+            paddingRight: '8px',
+            paddingLeft: '12px',
+            overflow: 'hidden'
           }}
           role="presentation"
         >
-          <div className="flex-grow overflow-auto">
+          <div className="px-2 py-2">
+              <GlobalSearch />
+          </div>
+          <div className="flex-grow overflow-auto h-full">
               <FileExplorer />
           </div>
         </Box>

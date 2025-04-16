@@ -97,12 +97,9 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
 
     return (
         <div
-            ref={dragHandle} // Required for drag-and-drop
-            style={style} // Includes positioning and default font styles
-            // Apply custom classes for spacing, hover, selection, etc.
-            // Removed default rounded corners, apply only on hover/select maybe?
-            className={`node-container flex items-center ${node.state.isEditing ? 'editing' : ''}`}
-            // Main click handler for the row (activates leaves, selects/focuses folders)
+            ref={dragHandle}
+            style={style}
+            className={`artifact-item ${node.state.isSelected ? 'selected' : ''} ${node.state.isEditing ? 'editing' : ''}`}
             onClick={(e) => {
                 // Don't trigger this if the click was on the toggle chevron
                 const target = e.target as HTMLElement;
@@ -114,35 +111,29 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
                     node.focus();
                 }
             }}
-            // Remove double-click toggle from the whole div, only toggle via chevron or explicitly
-            // onDoubleClick={() => node.isInternal && node.toggle()}
         >
-            {/* Wrapper for content with padding and hover/selection background */} 
-            <div
-                className={`flex-grow flex items-center space-x-1 min-w-0 px-2 py-1 rounded group
-                            ${node.state.isSelected ? 'bg-gray-200 dark:bg-slate-700 font-medium' : 'hover:bg-gray-100 dark:hover:bg-slate-800'} 
-                            font-jetbrains-mono pr-3 transition-colors duration-150 cursor-pointer
-                            ${node.data.type === 'artifact' ? 'hover:shadow-[inset_3px_0_0_0] hover:shadow-blue-400 dark:hover:shadow-blue-500' : ''}
-                            ${node.data.type === 'folder' ? 'hover:shadow-[inset_3px_0_0_0] hover:shadow-green-400 dark:hover:shadow-green-500' : ''}`}
+            {/* Indentation spacer */}
+            <span style={{ width: `${node.level * 12}px` }} className="inline-block"></span>
+
+            {/* Folder Toggle Chevron */} 
+            <span
+                className="folder-toggle-icon"
+                onClick={(e) => {
+                    e.stopPropagation(); // Prevent row onClick
+                    if (node.isInternal) node.toggle();
+                }}
+                style={{visibility: !node.isInternal ? 'hidden' : 'visible'}}
             >
-                {/* Indentation spacer */}
-                <span style={{ width: `${node.level * 12}px` }} className="inline-block flex-shrink-0"></span>
+                {node.isInternal && (node.isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />)}
+            </span>
 
-                {/* Folder Toggle Chevron */} 
-                <span
-                    className={`folder-toggle-icon flex-shrink-0 w-4 h-4 flex items-center justify-center ${!node.isInternal ? 'invisible' : 'cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-150'}`}
-                    onClick={(e) => {
-                        e.stopPropagation(); // Prevent row onClick
-                        if (node.isInternal) node.toggle();
-                    }}
-                >
-                    {node.isInternal && (node.isOpen ? <FaChevronDown size={10} /> : <FaChevronRight size={10} />)}
-                </span>
+            {/* Main Icon (Folder/File) */} 
+            <span className="artifact-icon">
+                <Icon />
+            </span>
 
-                {/* Main Icon (Folder/File) */} 
-                <Icon className={`icon flex-shrink-0 w-4 h-4 text-gray-600 dark:text-gray-400 ${node.data.type === 'folder' ? 'group-hover:text-green-600 dark:group-hover:text-green-400' : 'group-hover:text-blue-600 dark:group-hover:text-blue-400'} transition-colors duration-150`} />
-
-                {/* Name/Input Area */} 
+            {/* Name/Input Area */} 
+            <div className="artifact-info">
                 {node.isEditing ? (
                     <input
                         type="text"
@@ -154,17 +145,35 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNodeData>) {
                             if (e.key === 'Escape') node.reset();
                         }}
                         autoFocus
-                        className="node-edit-input px-1 py-0 border border-blue-400 rounded-sm flex-grow bg-white dark:bg-gray-700 text-black dark:text-white text-sm font-jetbrains-mono"
+                        className="node-edit-input"
                     />
                 ) : (
-                    <span
+                    <div className="artifact-title"
                         onDoubleClick={(e) => { e.stopPropagation(); node.edit(); }}
-                        className="node-name truncate flex-grow min-w-0 text-sm cursor-default hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150"
                     >
                         {node.data.name}
-                    </span> // Edit on double click name
+                    </div>
                 )}
             </div>
+            
+            {/* Delete button */}
+            <button 
+                className="delete-button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Delete "${node.data.name}"?`)) {
+                        // Handle deletion logic
+                        const treeApi = node.tree;
+                        treeApi.select(node.id);
+                        // This will trigger handleDeleteSelected since we've selected the node
+                        document.querySelector('.delete-selected-button')?.dispatchEvent(
+                            new MouseEvent('click', { bubbles: true })
+                        );
+                    }
+                }}
+            >
+                <DeleteOutlineIcon fontSize="small" />
+            </button>
         </div>
     );
 }
@@ -424,53 +433,73 @@ export function FileExplorer() {
     }
 
   return (
-        <div className="file-explorer-container h-full w-full overflow-auto text-sm bg-white dark:bg-gray-900 text-black dark:text-white flex flex-col font-jetbrains-mono pt-2">
-            {/* --- Action Button Row --- */}
-            <div className="p-2 border-b border-gray-200 dark:border-gray-700 flex items-center space-x-2 px-4 pb-3">
+    <div className="file-explorer">
+      {/* Action Button Row */}
+      <div className="file-explorer-header">
+        <h2 className="file-explorer-title">Files</h2>
+        <div className="file-explorer-actions">
           <button 
-                    title="New Folder"
-                    onClick={handleCreateFolder}
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors duration-150"
-                    disabled={!user || loading}
-                >
-                    <CreateNewFolderIcon fontSize="small" />
+            title="New Folder"
+            onClick={handleCreateFolder}
+            className={`${!user || loading ? 'disabled' : ''}`}
+            disabled={!user || loading}
+          >
+            <CreateNewFolderIcon fontSize="small" />
           </button>
           <button
-                    title="Multi-select (use Shift/Ctrl/Meta + Click)"
-                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors duration-150"
-                    disabled={!user || loading}
-                >
-                    <LibraryAddCheckIcon fontSize="small" />
+            title="Multi-select (use Shift/Ctrl/Meta + Click)"
+            className={`${!user || loading ? 'disabled' : ''}`}
+            disabled={!user || loading}
+          >
+            <LibraryAddCheckIcon fontSize="small" />
           </button>
           <button 
-                    title="Delete Selected"
+            title="Delete Selected"
             onClick={handleDeleteSelected}
-                    className="p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900 disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-gray-600 transition-colors duration-150"
-                    disabled={!user || loading || selectionCount === 0}
-                >
-                    <DeleteOutlineIcon fontSize="small" />
-                </button>
-            </div>
-            {/* --- Tree Component --- */}
-            <div className="flex-grow overflow-auto px-4"> { /* Increased horizontal padding */}
-                <Tree<TreeNodeData>
-                    ref={treeRef}
-                    data={treeData ?? []}
-                    indent={12}         // Reduced indent
-                    rowHeight={32}      // Slightly increased row height for padding
-                    openByDefault={false}
-                    disableDrag={false}
-                    disableDrop={false}
-                    paddingTop={12}     // Increased top padding
-                    paddingBottom={8}   // Adjusted padding
-                    onActivate={handleActivate}
-                    onMove={handleMove}
-                    onRename={handleRename}
-                    onSelect={handleSelectionChange} // Update selection count state
-                >
-                    {Node}
-                </Tree>
+            className={`delete-selected-button ${!user || loading || selectionCount === 0 ? 'disabled' : ''}`}
+            disabled={!user || loading || selectionCount === 0}
+          >
+            <DeleteOutlineIcon fontSize="small" />
+          </button>
         </div>
+      </div>
+      
+      {/* Show multiselect actions when items are selected */}
+      {selectionCount > 0 && (
+        <div className="multiselect-actions">
+          <span>{selectionCount} item{selectionCount !== 1 ? 's' : ''} selected</span>
+          <button 
+            className="delete-selected-button"
+            onClick={handleDeleteSelected}
+            disabled={!user || loading}
+          >
+            <DeleteOutlineIcon fontSize="small" />
+            Delete
+          </button>
+        </div>
+      )}
+      
+      {/* Tree Component */}
+      <div className="artifacts-list">
+        <Tree<TreeNodeData>
+          ref={treeRef}
+          data={treeData ?? []}
+          indent={12}
+          rowHeight={32}
+          openByDefault={false}
+          disableDrag={false}
+          disableDrop={false}
+          paddingTop={12}
+          paddingBottom={8}
+          onActivate={handleActivate}
+          onMove={handleMove}
+          onRename={handleRename}
+          onSelect={handleSelectionChange}
+          className="h-full"
+        >
+          {Node}
+        </Tree>
+      </div>
     </div>
   );
 } 

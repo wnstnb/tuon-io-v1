@@ -3,10 +3,12 @@
 .file-explorer {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100% !important;
+  width: 100%;
   overflow: hidden;
   background-color: var(--bg-secondary);
-  border-right: 1px solid var(--border-color);
+  /* Removing the right border */
+  border-right: none;
 }
 
 .file-explorer-header {
@@ -15,6 +17,7 @@
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .file-explorer-title {
@@ -127,9 +130,46 @@
 }
 
 .artifacts-list {
-  flex: 1;
+  flex: 1 1 auto !important;
   overflow-y: auto;
   padding: 8px;
+  width: 100%;
+  height: calc(100% - 56px) !important; /* Adjust for header height */
+  min-height: 0 !important; /* Critical for Firefox */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Target the actual tree container */
+.artifacts-list > div,
+.artifacts-list > div > div {
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+}
+
+/* Force tree to fill available space */
+[data-component="tree"],
+div[data-component="tree"],
+.file-explorer [data-component="tree"] {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 100% !important;
+  flex: 1 1 auto !important;
+}
+
+/* Target the viewport/scrolling container */
+.file-explorer [data-component="tree-innerElement"],
+[data-component="tree-innerElement"] {
+  min-height: 100% !important;
+}
+
+/* Fix scrollbar container */
+[data-component="tree-view"] {
+  height: 100% !important;
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .artifact-item {
@@ -142,7 +182,7 @@
 }
 
 .artifact-item:hover {
-  background-color: var(--bg-hover);
+  background-color: var(--primary-color-10);
 }
 
 .artifact-item.selected {
@@ -218,4 +258,101 @@
 .delete-button:hover {
   background-color: var(--danger-color-10);
   color: var(--danger-color);
+}
+
+/* Node-specific styles */
+.folder-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-right: 4px;
+}
+
+.folder-toggle-icon:hover {
+  color: var(--text-primary);
+}
+
+.node-edit-input {
+  padding: 2px 4px;
+  border: 1px solid var(--primary-color);
+  border-radius: 3px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  width: 100%;
+  outline: none;
+}
+
+.artifact-item.editing .artifact-info {
+  flex: 1;
+}
+
+/* Add disabled state for buttons */
+.file-explorer-actions button.disabled,
+button.delete-selected-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Ensure icons in the file explorer have the right size */
+.artifact-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.delete-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* MUI Drawer overrides */
+.file-explorer-drawer .MuiPaper-root {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-right: 1px solid var(--border-color) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Make sure Box container takes full height */
+.file-explorer-drawer .MuiPaper-root > div {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/* Fix for overflow div in Box */
+.file-explorer-drawer .flex-grow.overflow-auto {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.file-explorer-drawer .MuiBackdrop-root {
+  background-color: var(--bg-secondary-light) !important;
+  opacity: 0.7 !important;
+}
+
+[data-theme='dark'] .file-explorer-drawer .MuiPaper-root {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme='dark'] .file-explorer-drawer .MuiBackdrop-root {
+  background-color: rgba(15, 19, 23, 0.7) !important;
+}
+
+/* Style for empty conversation items in search results */
+.search-result-item .result-preview:contains('Empty conversation') {
+  color: var(--text-secondary);
+  font-style: italic;
+  opacity: 0.7;
 } 

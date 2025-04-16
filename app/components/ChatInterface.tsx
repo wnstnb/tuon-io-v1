@@ -18,25 +18,6 @@ export default function ChatInterface() {
 
   return (
     <div className="chat-interface">
-      <div className="chat-header">
-        <div className="header-button-container">
-          <button 
-            className="new-chat-button"
-            onClick={() => createNewConversation()}
-            aria-label="New Conversation"
-          >
-            <Plus size={16} />
-            <span>New</span>
-          </button>
-        </div>
-        {/* Remove the ModelSelector and its container div from here */}
-        {/*
-        <div className="header-button-container">
-          <ModelSelector />
-        </div>
-        */}
-      </div>
-      
       {/* Chat messages are always rendered now (if data exists) */}
       <div className="chat-messages">
         {/* Display loading indicator specifically when messages are being loaded */}
