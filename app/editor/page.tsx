@@ -564,7 +564,7 @@ function EditorPageContent() {
 
   // --- UPDATED: Handle Content Changes ---
   const handleContentChange = useCallback((content: Block[], sourceArtifactId?: string) => {
-    if (process.env.NODE_ENV === 'development') console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
+    // if (process.env.NODE_ENV === 'development') console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
     
     // Check if content is coming from a different artifact (AI generation)
     if (sourceArtifactId && sourceArtifactId !== currentArtifactId) {
@@ -615,9 +615,9 @@ function EditorPageContent() {
       }
     } else {
       if (sourceArtifactId) {
-        if (process.env.NODE_ENV === 'development') console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
+        // if (process.env.NODE_ENV === 'development') console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
       } else {
-        if (process.env.NODE_ENV === 'development') console.log(`Content change has no source artifactId (likely user edit)`);
+        // if (process.env.NODE_ENV === 'development') console.log(`Content change has no source artifactId (likely user edit)`);
       }
     }
     

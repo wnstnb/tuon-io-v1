@@ -17,6 +17,7 @@ import { toast } from 'react-toastify';
 // Define supported AI models
 export type AIModelType = 
   | 'gpt-4o'
+  | 'gpt-4.1-2025-04-14'
   | 'gpt-o3-mini' 
   | 'gemini-2.0-flash'
   | 'gemini-2.5-pro-preview-03-25';
@@ -768,6 +769,23 @@ export function AIProvider({ children }: AIProviderProps) {
       //     console.error("Error handling editor update:", error);
       //   }
       // }
+      // --- Restore and Implement Editor Content Update ---
+      if (aiEditorResponse && currentConversation?.id) { // Check if there's content and a conversation
+        try {
+          console.log(`AIContext: Dispatching editor:setContent for artifact: ${currentConversation.artifactId}`);
+          const setContentEvent = new CustomEvent('editor:setContent', {
+            detail: { 
+              content: aiEditorResponse, // The markdown content from the AI
+              artifactId: currentConversation.artifactId || null // Pass the artifact ID
+            }
+          });
+          window.dispatchEvent(setContentEvent);
+        } catch (error) {
+          console.error("AIContext: Error dispatching editor:setContent event:", error);
+          // Optionally, notify the user via toast
+          toast.error("Failed to update editor content."); 
+        }
+      }
       // --------------------------------
 
     } catch (error) {

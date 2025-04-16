@@ -101,8 +101,8 @@ export default function EditorFAB({ artifactId, userId, onDelete }: EditorFABPro
         onClick={toggleExpand}
         aria-label={isExpanded ? "Close menu" : "Open menu"}
       >
-        <Plus className="icon-open" size={24} />
-        <X className="icon-close" size={24} />
+        <Plus className="icon-open" size={18} />
+        <X className="icon-close" size={18} />
       </button>
       
       <div className="fab-actions">

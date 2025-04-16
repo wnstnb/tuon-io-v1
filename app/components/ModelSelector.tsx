@@ -4,6 +4,7 @@ import React from 'react';
 import { useAI, AIModelType } from '../context/AIContext';
 
 const modelOptions: { value: AIModelType; label: string }[] = [
+  { value: 'gpt-4.1-2025-04-14', label: 'GPT-4.1' },
   { value: 'gpt-4o', label: 'GPT-4o' },
   { value: 'gpt-o3-mini', label: 'GPT-3.5 Mini' },
   { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },

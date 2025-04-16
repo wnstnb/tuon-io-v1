@@ -84,15 +84,15 @@ const ThemeShowcase = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Left Side - Light mode equivalent */}
-        <div className="bg-white p-8 rounded-lg shadow-md dark:bg-gray-800">
-          <h2 className="text-2xl font-semibold mb-6">Controls</h2>
+        <div className="bg-[#F6F8FA] p-8 rounded-lg shadow-md dark:bg-[#2B3137]">
+          <h2 className="text-2xl font-semibold mb-6 text-[#0F1317] dark:text-white">Controls</h2>
           
           {/* Sliders Section */}
           <div className="mb-8">
-            <h3 className="text-lg font-medium mb-4">Sliders</h3>
+            <h3 className="text-lg font-medium mb-4 text-[#0F1317] dark:text-white">Sliders</h3>
             <div className="space-y-6">
               <div>
-                <label className="block mb-2 text-sm font-medium">Volume</label>
+                <label className="block mb-2 text-sm font-medium text-[#3F4F60] dark:text-white">Volume</label>
                 <input 
                   type="range" 
                   min="0" 
@@ -103,11 +103,11 @@ const ThemeShowcase = () => {
                 />
               </div>
               <div>
-                <label className="block mb-2 text-sm font-medium">Brightness</label>
+                <label className="block mb-2 text-sm font-medium text-[#3F4F60] dark:text-white">Brightness</label>
                 <input type="range" min="0" max="100" defaultValue="75" className="w-full" />
               </div>
               <div>
-                <label className="block mb-2 text-sm font-medium">Contrast</label>
+                <label className="block mb-2 text-sm font-medium text-[#3F4F60] dark:text-white">Contrast</label>
                 <input type="range" min="0" max="100" defaultValue="60" className="w-full" />
               </div>
             </div>
@@ -115,8 +115,8 @@ const ThemeShowcase = () => {
 
           {/* Home Button */}
           <div className="mb-8">
-            <div className="w-16 h-16 rounded-xl bg-white dark:bg-gray-700 shadow-md flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+            <div className="w-16 h-16 rounded-xl bg-[#D9DDE2] dark:bg-[#0F1317] shadow-md flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E5B679" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dark:text-primary">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
               </svg>
@@ -125,20 +125,20 @@ const ThemeShowcase = () => {
         </div>
 
         {/* Right Side - Dark mode equivalent */}
-        <div className="bg-gray-900 p-8 rounded-lg shadow-lg text-white">
-          <h2 className="text-2xl font-semibold mb-6">User Profile</h2>
+        <div className="bg-[#0F1317] p-8 rounded-lg shadow-lg text-white">
+          <h2 className="text-2xl font-semibold mb-6 text-white">User Profile</h2>
           
           {/* Profile Section */}
           <div className="mb-8 flex items-center space-x-4">
             <div className="profile-avatar">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#C79553" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                 <circle cx="12" cy="7" r="4"></circle>
               </svg>
             </div>
             <div>
-              <h3 className="text-xl font-medium">Name Surname</h3>
-              <p className="text-sm text-gray-400">Lorem ipsum dolor</p>
+              <h3 className="text-xl font-medium text-white">Name Surname</h3>
+              <p className="text-sm text-[#A8ADB4]">Lorem ipsum dolor</p>
             </div>
           </div>
 
@@ -146,25 +146,25 @@ const ThemeShowcase = () => {
           <div className="mb-8">
             <div className="search-bar mb-4">
               <span className="search-bar-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C79553" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
               </span>
-              <input type="text" placeholder="Search" />
+              <input type="text" placeholder="Search" className="bg-[#2B3137] text-white placeholder-[#3F4F60] border border-[#3F4F60]" />
             </div>
           </div>
 
           {/* Video Section */}
           <div className="mb-8">
             <div className="video-player">
-              <div className="aspect-w-16 aspect-h-9 bg-gray-800 rounded-t-lg flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+              <div className="aspect-w-16 aspect-h-9 bg-[#2B3137] rounded-t-lg flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#F1C37D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
                 </svg>
               </div>
-              <div className="video-controls">
-                <button className="play-button">
+              <div className="video-controls bg-[#2B3137] p-2 rounded-b-lg flex items-center space-x-2">
+                <button className="play-button text-[#C79553]">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="5 3 19 12 5 21 5 3"></polygon>
                   </svg>
@@ -178,26 +178,26 @@ const ThemeShowcase = () => {
 
           {/* Calendar */}
           <div className="mb-8">
-            <div className="calendar">
-              <div className="calendar-header">
-                <button>&lt;</button>
-                <h3>August 2023</h3>
-                <button>&gt;</button>
+            <div className="calendar bg-[#2B3137] p-4 rounded-lg">
+              <div className="calendar-header flex justify-between items-center mb-4">
+                <button className="text-[#C79553]">&lt;</button>
+                <h3 className="text-white">August 2023</h3>
+                <button className="text-[#C79553]">&gt;</button>
               </div>
               <div className="grid grid-cols-7 gap-1 mb-2">
-                <span className="text-center text-xs">S</span>
-                <span className="text-center text-xs">M</span>
-                <span className="text-center text-xs">T</span>
-                <span className="text-center text-xs">W</span>
-                <span className="text-center text-xs">T</span>
-                <span className="text-center text-xs">F</span>
-                <span className="text-center text-xs">S</span>
+                <span className="text-center text-xs text-[#A8ADB4]">S</span>
+                <span className="text-center text-xs text-[#A8ADB4]">M</span>
+                <span className="text-center text-xs text-[#A8ADB4]">T</span>
+                <span className="text-center text-xs text-[#A8ADB4]">W</span>
+                <span className="text-center text-xs text-[#A8ADB4]">T</span>
+                <span className="text-center text-xs text-[#A8ADB4]">F</span>
+                <span className="text-center text-xs text-[#A8ADB4]">S</span>
               </div>
-              <div className="calendar-grid">
+              <div className="calendar-grid grid grid-cols-7 gap-1">
                 {[...Array(31)].map((_, i) => (
                   <div 
                     key={i} 
-                    className={`calendar-day ${i === 16 ? 'today' : ''}`}
+                    className={`calendar-day text-center p-1 text-sm rounded ${i === 16 ? 'bg-[#C79553] text-white' : 'hover:bg-[#3F4F60]'}`}
                   >
                     {i + 1}
                   </div>

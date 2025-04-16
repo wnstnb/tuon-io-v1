@@ -21,13 +21,6 @@ export default function ThemeAwareEditor({
   // Always call useTheme at the component level, regardless of mounting state
   const { theme } = useTheme();
   
-  // Log when initialContent changes to verify updates
-  useEffect(() => {
-    if (mounted && initialContent) {
-      console.log(`ThemeAwareEditor content updated with ${initialContent.length} blocks`);
-    }
-  }, [initialContent, mounted]);
-  
   // Only access theme context after component has mounted
   useEffect(() => {
     setMounted(true);

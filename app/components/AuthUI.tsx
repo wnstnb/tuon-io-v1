@@ -189,8 +189,13 @@ export default function AuthUI() {
             variables: {
               default: {
                 colors: {
-                  brand: 'var(--primary-color)',
-                  brandAccent: 'var(--primary-dark)',
+                  brand: '#E5B679',            /* Sunkissed Brass */
+                  brandAccent: '#B38A58',      /* Wheat Bronze */
+                  brandButtonText: '#FFFFFF',  /* White for contrast */
+                  inputBackground: '#FFFFFF',  /* White for inputs */
+                  inputBorder: '#96A2B4',      /* Blue Pearl */
+                  inputPlaceholder: '#3F4F60', /* Moonlit Azure */
+                  messageText: '#3F4F60',      /* Moonlit Azure */
                 },
                 radii: {
                   borderRadiusButton: '4px',
@@ -198,6 +203,19 @@ export default function AuthUI() {
                   inputBorderRadius: '4px',
                 },
               },
+              dark: {
+                colors: {
+                  brand: '#C79553',            /* Ember Gold */
+                  brandAccent: '#8C6638',      /* Burnished Bronze */
+                  brandButtonText: '#FFFFFF',  /* White */
+                  inputBackground: '#2B3137',  /* Steel Ash */
+                  inputText: '#FFFFFF',        /* White */
+                  inputPlaceholder: '#A8ADB4', /* Frost Gray */
+                  inputBorder: '#3F4F60',      /* Moonlit Azure */
+                  dividerBackground: '#3F4F60',/* Moonlit Azure */
+                  messageText: '#A8ADB4',      /* Frost Gray */
+                }
+              }
             },
             className: {
               container: 'supabase-auth-ui',

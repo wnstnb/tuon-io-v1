@@ -327,7 +327,7 @@ export class ArtifactService {
       // Prepare data for update
       const updateData: Partial<DBartifact> = {};
       if (contentChanged) {
-        console.log(`[${operationId}] Content changed, attempting update...`);
+        // console.log(`[${operationId}] Content changed, attempting update...`);
         // --- RE-ENABLE image processing --- //
         const processedContent = await this.processContentImages(userId, content, artifactId);
         updateData.content = processedContent;

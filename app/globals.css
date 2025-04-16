@@ -1,47 +1,47 @@
 @import './styles/components/editor-fab.css';
 
 :root {
-  /* Light theme (default) - Based on the provided image */
+  /* Light theme - Updated with light mode equivalents */
   --foreground-rgb: 0, 0, 0;
-  --background-rgb: 255, 255, 255;
-  --primary-color: #0091ff; /* Bright blue from image */
-  --secondary-color: #0091ff; /* Using same blue for consistency */
-  --accent-color: #0091ff;
-  --text-color: #1e293b;
-  --muted-text-color: #64748b;
-  --border-color: #e2e8f0;
-  --header-bg: #f8fafc;
-  --editor-bg: #ffffff;
-  --title-hover-color: #0091ff;
-  --left-pane-bg: #f8fafc;
-  --toggle-button-bg: #ffffff;
-  --tab-active-bg: #f1f5f9;
-  --tab-active-border: #0091ff;
-  --text-color-secondary: #64748b;
-  --bg-color: #fff;
-  --hover-bg: #f5f5f5;
-  --active-bg: #f0f0f0;
-  --input-bg: #fff;
-  --accent-color-light: #e6f4ff;
-  --accent-color-hover: #007be6;
-  --message-bg: #f9f9f9;
-  --card-bg: #ffffff;
-  --disabled-bg: #d1d5db;
-  --success-bg: #ecfdf5;
-  --success-text: #047857;
-  --error-bg: #fef2f2;
-  --error-text: #b91c1c;
+  --background-rgb: 246, 248, 250;  /* Cloud Mist #F6F8FA */
+  --primary-color: #E5B679; /* Sunkissed Brass */
+  --secondary-color: #E5B679; /* Sunkissed Brass */
+  --accent-color: #FAD89D; /* Golden Sand */
+  --text-color: #0F1317; /* Midnight Slate - for contrast */
+  --muted-text-color: #3F4F60; /* Moonlit Azure - for readable muted text */
+  --border-color: #96A2B4; /* Blue Pearl */
+  --header-bg: #D9DDE2; /* Silver Fog */
+  --editor-bg: #F6F8FA; /* Cloud Mist */
+  --title-hover-color: #FAD89D; /* Golden Sand */
+  --left-pane-bg: #F6F8FA; /* Cloud Mist */
+  --toggle-button-bg: #D9DDE2; /* Silver Fog */
+  --tab-active-bg: #D9DDE2; /* Silver Fog */
+  --tab-active-border: #E5B679; /* Sunkissed Brass */
+  --text-color-secondary: #96A2B4; /* Blue Pearl */
+  --bg-color: #F6F8FA; /* Cloud Mist */
+  --hover-bg: #D9DDE2; /* Silver Fog */
+  --active-bg: #96A2B4; /* Blue Pearl */
+  --input-bg: #FFFFFF; /* Keep white for inputs */
+  --accent-color-light: rgba(229, 182, 121, 0.15); /* Sunkissed Brass with transparency */
+  --accent-color-hover: #FAD89D; /* Golden Sand */
+  --message-bg: #FFFFFF; /* White for message bubbles */
+  --card-bg: #FFFFFF; /* White for cards */
+  --disabled-bg: #D9DDE2; /* Silver Fog */
+  --success-bg: #ecfdf5; /* Keep existing */
+  --success-text: #047857; /* Keep existing */
+  --error-bg: #fef2f2; /* Keep existing */
+  --error-text: #b91c1c; /* Keep existing */
   /* Additional file explorer variables */
-  --bg-secondary: #f8fafc;
-  --bg-secondary-light: #f1f5f9;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
-  --primary-color-10: rgba(0, 145, 255, 0.1);
-  --danger-color: #ef4444;
-  --danger-color-10: rgba(239, 68, 68, 0.1);
-  --success-color: #22c55e;
-  --info-color: #0091ff;
-  --primary-color-dark: #0076cc;
+  --bg-secondary: #F6F8FA; /* Cloud Mist */
+  --bg-secondary-light: #D9DDE2; /* Silver Fog */
+  --text-primary: #0F1317; /* Midnight Slate - for contrast */
+  --text-secondary: #3F4F60; /* Moonlit Azure - for readable secondary text */
+  --primary-color-10: rgba(229, 182, 121, 0.1); /* Sunkissed Brass with transparency */
+  --danger-color: #ef4444; /* Keep existing */
+  --danger-color-10: rgba(239, 68, 68, 0.1); /* Keep existing */
+  --success-color: #22c55e; /* Keep existing */
+  --info-color: #FAD89D; /* Golden Sand */
+  --primary-color-dark: #B38A58; /* Wheat Bronze */
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -50,47 +50,47 @@
 }
 
 [data-theme='dark'] {
-  /* Dark theme - Based on the provided image */
+  /* Dark theme - Based on the new color palette */
   --foreground-rgb: 255, 255, 255;
-  --background-rgb: 23, 28, 42;  /* Dark navy from image */
-  --primary-color: #0091ff;  /* Bright blue from image */
-  --secondary-color: #0091ff;
-  --accent-color: #0091ff;
-  --text-color: #e2e8f0;
-  --muted-text-color: #94a3b8;
-  --border-color: #2d3748;
-  --header-bg: #1a202c;
-  --editor-bg: #171c2a;
-  --title-hover-color: #38bdf8;
-  --left-pane-bg: #171c2a;
-  --toggle-button-bg: #1f2937;
-  --tab-active-bg: #1f2937;
-  --tab-active-border: #0091ff;
-  --text-color-secondary: #94a3b8;
-  --bg-color: #171c2a;
-  --hover-bg: #1f2937;
-  --active-bg: #2d3748;
-  --input-bg: #1a202c;
-  --accent-color-light: rgba(0, 145, 255, 0.15);
-  --accent-color-hover: #38bdf8;
-  --message-bg: #1a202c;
-  --card-bg: #1a202c;
-  --disabled-bg: #4b5563;
-  --success-bg: #064e3b;
-  --success-text: #d1fae5;
-  --error-bg: #7f1d1d;
-  --error-text: #fee2e2;
+  --background-rgb: 15, 19, 23;  /* Midnight Slate #0F1317 */
+  --primary-color: #C79553;  /* Ember Gold */
+  --secondary-color: #C79553; /* Ember Gold */
+  --accent-color: #F1C37D; /* Luminous Amber */
+  --text-color: #FFFFFF; /* White */
+  --muted-text-color: #A8ADB4; /* Keeping Frost Gray for readability */
+  --border-color: #3F4F60; /* Moonlit Azure */
+  --header-bg: #2B3137; /* Steel Ash */
+  --editor-bg: #0F1317; /* Midnight Slate */
+  --title-hover-color: #F1C37D; /* Luminous Amber */
+  --left-pane-bg: #0F1317; /* Midnight Slate */
+  --toggle-button-bg: #2B3137; /* Steel Ash */
+  --tab-active-bg: #2B3137; /* Steel Ash */
+  --tab-active-border: #C79553; /* Ember Gold */
+  --text-color-secondary: #8C6638; /* Burnished Bronze */
+  --bg-color: #0F1317; /* Midnight Slate */
+  --hover-bg: #2B3137; /* Steel Ash */
+  --active-bg: #3F4F60; /* Moonlit Azure */
+  --input-bg: #2B3137; /* Steel Ash */
+  --accent-color-light: rgba(199, 149, 83, 0.15); /* Ember Gold with transparency */
+  --accent-color-hover: #F1C37D; /* Luminous Amber */
+  --message-bg: #2B3137; /* Steel Ash */
+  --card-bg: #2B3137; /* Steel Ash */
+  --disabled-bg: #3F4F60; /* Moonlit Azure */
+  --success-bg: #064e3b; /* Keep existing */
+  --success-text: #d1fae5; /* Keep existing */
+  --error-bg: #7f1d1d; /* Keep existing */
+  --error-text: #fee2e2; /* Keep existing */
   /* Additional file explorer variables */
-  --bg-secondary: #171c2a;
-  --bg-secondary-light: #1a202c;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --primary-color-10: rgba(0, 145, 255, 0.1);
-  --danger-color: #f87171;
-  --danger-color-10: rgba(248, 113, 113, 0.1);
-  --success-color: #4ade80;
-  --info-color: #38bdf8;
-  --primary-color-dark: #0076cc;
+  --bg-secondary: #0F1317; /* Midnight Slate */
+  --bg-secondary-light: #2B3137; /* Steel Ash */
+  --text-primary: #FFFFFF; /* White */
+  --text-secondary: #A8ADB4; /* Keeping Frost Gray */
+  --primary-color-10: rgba(199, 149, 83, 0.1); /* Ember Gold with transparency */
+  --danger-color: #f87171; /* Keep existing */
+  --danger-color-10: rgba(248, 113, 113, 0.1); /* Keep existing */
+  --success-color: #4ade80; /* Keep existing */
+  --info-color: #F1C37D; /* Luminous Amber */
+  --primary-color-dark: #8C6638; /* Burnished Bronze */
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -438,7 +438,7 @@ h1 {
   left: 50%;
   transform: translateX(-50%);
   height: 100%;
-  width: 1px;  /* Thin visible line */
+  width: 0px;  /* Thin visible line */
   background-color: var(--border-color);
   transition: background-color 0.2s linear;
 }
@@ -624,8 +624,10 @@ h1 {
 }
 
 .toggle-button:hover {
-  background-color: var(--primary-color);
-  color: white;
+  /* background-color: var(--primary-color);
+  color: white; */
+  background-color: var(--hover-bg);
+  border-color: var(--primary-color);
 }
 
 /* Toggle button on resize handle */
@@ -812,7 +814,7 @@ h1 {
 }
 
 .chat-textarea::placeholder {
-  color: var(--text-color-secondary);
+  color: var(--muted-text-color);
 }
 
 .input-buttons {
@@ -870,6 +872,7 @@ h1 {
 
 .image-button:hover {
   background-color: var(--hover-bg);
+  border-color: var(--primary-color);
 }
 
 .image-preview-container {
@@ -934,7 +937,7 @@ h1 {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  display: flex;
+  display: none; /* Hide avatars */
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
@@ -961,6 +964,11 @@ h1 {
   flex-direction: column;
 }
 
+/* Adjust the message bubbles to account for removed avatars */
+.chat-message {
+  gap: 4px; /* Reduce gap since avatars are removed */
+}
+
 .message-bubble {
   padding: 12px 16px;
   border-radius: 12px;
@@ -969,14 +977,20 @@ h1 {
   white-space: pre-wrap;
 }
 
+/* Add a bit more padding to the user/assistant messages to help distinguish them */
 .user-message .message-bubble {
   background-color: var(--accent-color-light);
   border: 1px solid var(--accent-color-light);
+  margin-left: auto; /* Push user messages to the right */
+  max-width: 85%; /* Limit width for better readability */
+  border-radius: 12px 12px 0 12px; /* Rounded corners with point at bottom left */
 }
 
 .assistant-message .message-bubble {
   background-color: var(--message-bg);
   border: 1px solid var(--border-color);
+  max-width: 85%; /* Limit width for better readability */
+  border-radius: 12px 12px 12px 0; /* Rounded corners with point at bottom right */
 }
 
 .system-message .message-bubble {
@@ -1070,7 +1084,7 @@ h1 {
   padding: 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  background-color: var(--accent-color);
+  background-color: var(--primary-color);
   color: white;
   cursor: pointer;
   transition: background-color 0.2s;
@@ -1080,6 +1094,11 @@ h1 {
 
 .new-chat-button:hover {
   background-color: var(--accent-color-hover);
+}
+
+/* Override dark mode new chat button hover */
+[data-theme='dark'] .new-chat-button:hover {
+  background-color: #F1C37D; /* Luminous Amber */
 }
 
 .history-list {
@@ -2800,3 +2819,47 @@ html.dark .ai-status-indicator {
 }
 
 /* ... rest of globals.css ... */ 
+
+/* Add hyperlink styles for dark mode */
+[data-theme='dark'] a {
+  color: var(--primary-color-dark); /* Burnished Bronze (#8C6638) */
+  transition: color 0.2s ease;
+}
+
+[data-theme='dark'] a:hover {
+  color: var(--accent-color); /* Luminous Amber (#F1C37D) */
+  text-decoration: underline;
+}
+
+/* Style for any link classes in dark mode */
+[data-theme='dark'] .link {
+  color: var(--primary-color-dark);
+  transition: color 0.2s ease;
+}
+
+[data-theme='dark'] .link:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
+
+/* Add hyperlink styles for light mode */
+a {
+  color: var(--primary-color-dark); /* Wheat Bronze (#B38A58) */
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--accent-color); /* Golden Sand (#FAD89D) */
+  text-decoration: underline;
+}
+
+/* Style for any link classes in light mode */
+.link {
+  color: var(--primary-color-dark);
+  transition: color 0.2s ease;
+}
+
+.link:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
+}

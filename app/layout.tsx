@@ -7,7 +7,7 @@ import './globals.css';
 import './styles/components/file-explorer.css';
 import 'react-toastify/dist/ReactToastify.css';
 import ClientProviders from './context/ClientProviders';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, Flip } from 'react-toastify';
 
 const inter = Inter({ subsets: ['latin'] });
 const jetbrainsMono = JetBrains_Mono({ 
@@ -32,7 +32,7 @@ export default function RootLayout({
         <ClientProviders>
           {children}
           <ToastContainer
-            position="bottom-left"
+            position="bottom-center"
             autoClose={3000}
             hideProgressBar={false}
             newestOnTop={false}
@@ -42,6 +42,7 @@ export default function RootLayout({
             draggable
             pauseOnHover
             theme="dark"
+            transition={Flip}
           />
         </ClientProviders>
       </body>

@@ -107,24 +107,26 @@ const BlockNoteEditor = dynamic(
         // --- NEW: Explicitly update editor content on initialContent change ---
         React.useEffect(() => {
           if (editor && props.initialContent) {
-            // --- DEBUG LOG: Check content before isEqual ---
-            console.log(`[DEBUG Editor Effect] Artifact: ${props.artifactId}. Comparing props.initialContent (Blocks: ${props.initialContent?.length}) vs editor.document (Blocks: ${editor.document?.length}).`);
-            // console.log('[DEBUG Editor Effect] props.initialContent:', JSON.stringify(props.initialContent?.slice(0,1)));
-            // console.log('[DEBUG Editor Effect] editor.document:', JSON.stringify(editor.document?.slice(0,1)));
-            // --- END DEBUG LOG ---
-
-            // Check if the incoming content is different from the current editor document
-            // Use isEqual for deep comparison of block arrays
-            if (!isEqual(props.initialContent, editor.document)) {
-              console.log(`Editor: Detected change in initialContent for artifact ${props.artifactId}. Replacing blocks.`);
-              // --- NEW: Set flag before programmatic change ---
-              isProgrammaticChangeRef.current = true;
-              // --- END NEW ---
-              editor.replaceBlocks(editor.document, props.initialContent);
+            // Quick length check before expensive deep comparison
+            const lengthDiffers = props.initialContent.length !== editor.document.length;
+            
+            // Only perform deep comparison if lengths differ or if we have to (forced updates)
+            if (lengthDiffers || (props.forceContentUpdate === true) || 
+                (!lengthDiffers && !isEqual(props.initialContent[0], editor.document[0]))) {
+                
+              // Now perform full isEqual only if necessary
+              if (lengthDiffers || props.forceContentUpdate === true || 
+                  !isEqual(props.initialContent, editor.document)) {
+                // console.log(`Editor: Detected change in initialContent for artifact ${props.artifactId}. Replacing blocks.`);
+                // --- NEW: Set flag before programmatic change ---
+                isProgrammaticChangeRef.current = true;
+                // --- END NEW ---
+                editor.replaceBlocks(editor.document, props.initialContent);
+              }
             }
           }
           // Dependency: Run when editor instance exists or initialContent prop changes.
-        }, [editor, props.initialContent, props.artifactId]); 
+        }, [editor, props.initialContent, props.artifactId, props.forceContentUpdate]); 
         // --- END: Explicit update effect ---
 
         // Handle editor:setContent
@@ -134,7 +136,11 @@ const BlockNoteEditor = dynamic(
               const markdownString = event.detail.content;
               // Extract the artifactId from the event if provided
               const sourceArtifactId = event.detail.artifactId;
-              console.log(`Editor: Received setContent event with artifactId: ${sourceArtifactId}`);
+              
+              // Only log in development mode
+              if (process.env.NODE_ENV === 'development') {
+                console.log(`Editor: Received setContent event with artifactId: ${sourceArtifactId}`);
+              }
               
               if (!markdownString) {
                 editor.replaceBlocks(editor.document, []);
@@ -277,7 +283,7 @@ const BlockNoteEditor = dynamic(
           const handleChange = () => {
             // --- NEW: Check programmatic change flag ---
             if (isProgrammaticChangeRef.current) {
-              console.log("Editor onChange: Ignored programmatic change.");
+              // console.log("Editor onChange: Ignored programmatic change.");
               // Reset the flag AFTER the current event stack clears
               setTimeout(() => {
                 isProgrammaticChangeRef.current = false;
@@ -287,7 +293,7 @@ const BlockNoteEditor = dynamic(
             // --- END NEW ---
             
             // If it's a user change, proceed as before
-            console.log("Editor onChange: Processing user change.");
+            // console.log("Editor onChange: Processing user change.");
             props.onChange(editor.document); 
           };
 
@@ -328,7 +334,8 @@ interface EditorProps {
   setAiStatus?: (status: { isProcessing: boolean; message?: string }) => void; 
   currentContent?: Block[]; 
   onEditorReady?: (editor: BlockNoteEditorType) => void;
-  isEditorProcessing?: boolean; 
+  isEditorProcessing?: boolean;
+  forceContentUpdate?: boolean; 
 }
 
 // Rename the original function component
@@ -341,7 +348,8 @@ const EditorComponent = ({
   setAiStatus, 
   currentContent,
   onEditorReady,
-  isEditorProcessing
+  isEditorProcessing,
+  forceContentUpdate
 }: EditorProps) => {
   // State to track content updates from AI (might be needed for keying/remounting)
   const [aiContent, setAiContent] = React.useState<Block[] | null>(null);
@@ -357,7 +365,10 @@ const EditorComponent = ({
 
   // --- NEW: Add logging for internalAiStatus changes ---
   React.useEffect(() => {
-    if (process.env.NODE_ENV === 'development') console.log('[EditorComponent] internalAiStatus changed:', internalAiStatus);
+    // Only log in development mode and only when actually changing to a processing state
+    if (process.env.NODE_ENV === 'development' && internalAiStatus.isProcessing) {
+      console.log('[EditorComponent] Processing state:', internalAiStatus);
+    }
   }, [internalAiStatus]);
   // --- END NEW LOGGING ---
 
@@ -411,6 +422,7 @@ const EditorComponent = ({
         artifactId={artifactId}
         userId={userId}
         onEditorReady={onEditorReady}
+        forceContentUpdate={forceContentUpdate}
       />
     </div>
   );

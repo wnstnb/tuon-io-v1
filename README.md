@@ -43,7 +43,7 @@ AI-powered content creation and management platform that stores your content in 
      - OpenAI API key for GPT models
      - Google API key for Gemini models
      - Supabase credentials
-     - ExaSearch API key (for semantic search)
+     - ExaSearch API key (for web search)
      - S3-compatible storage credentials
 
 ### Supabase Setup
