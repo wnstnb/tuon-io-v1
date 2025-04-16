@@ -725,4 +725,113 @@ export class CreatorAgentService {
     console.warn("CreatorAgentService: No currentModel passed to selectAppropriateModel, falling back to default.");
     return 'gemini-2.0-flash'; // Or choose a smarter default based on analysis
   }
+
+  // --- NEW: Process Editor Action ---
+  static async processEditorAction(
+    instruction: string,
+    selectedBlockIds: string[], // Keep for context and return structure
+    fullContextMarkdown: string,
+    model: AIModelType,
+    artifactId: string // For potential future context/logging
+  ): Promise<{ type: string, action: string, targetBlockIds: string[], newMarkdown: string }> {
+    this.initializeClients();
+    console.log(`CreatorAgentService: Processing editor action for artifact ${artifactId} using ${model}.`);
+    console.log(`Instruction: ${instruction}`);
+    console.log(`Target Block IDs: ${selectedBlockIds.join(', ')}`);
+    // console.log(`Full Context Markdown (truncated): ${fullContextMarkdown.substring(0, 200)}...`);
+
+    let aiGeneratedMarkdown = '';
+    const startTime = Date.now(); // For potential performance tracking
+
+    try {
+      // Construct the specialized prompt
+      const systemPrompt = `You are an AI assistant specialized in editing document sections.
+The user has selected a portion of a larger document (represented by block IDs: ${selectedBlockIds.join(', ')}) and provided an instruction for modification.
+You will be given the full document context in Markdown format and the user's instruction.
+Your task is to rewrite ONLY the selected portion based on the instruction, using the full document for context if necessary (e.g., for style, consistency, or information).
+Output ONLY the modified Markdown content that should replace the original selection. Do NOT include conversational text, introductions, explanations, or markdown fences (like \`\`\`) around your output. Just provide the raw, modified Markdown for the selected section.`;
+
+      const userPrompt = `Instruction: "${instruction}"
+
+Full Document Context:
+\`\`\`markdown
+${fullContextMarkdown}
+\`\`\`
+
+Generate the modified Markdown for the selected section based on the instruction and the full context. Remember to output ONLY the replacement Markdown.`;
+
+      if (model.startsWith('gpt')) {
+        if (!this.openaiClient) throw new Error("OpenAI client not initialized.");
+        
+        const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ];
+
+        console.log(`CreatorAgentService (EditorAction): Calling OpenAI (${model})`);
+        const response = await this.openaiClient.chat.completions.create({
+          model: model,
+          messages: messages,
+          temperature: 0.5, // Lower temperature for more focused editing
+        });
+        aiGeneratedMarkdown = response.choices[0]?.message?.content?.trim() || '';
+
+      } else if (model.startsWith('gemini')) {
+        if (!this.genaiClient) throw new Error("Gemini client not initialized.");
+
+        // Gemini works better with direct instruction in the user prompt
+        // Combine system and user prompt ideas into a single prompt structure
+        const combinedPrompt = `${systemPrompt}
+
+${userPrompt}`; // Combine instructions and context
+
+        console.log(`CreatorAgentService (EditorAction): Calling Gemini (${model})`);
+        const geminiModel = this.genaiClient.getGenerativeModel({ model: model });
+        const result = await geminiModel.generateContent(combinedPrompt);
+        const response = result.response;
+        aiGeneratedMarkdown = response.text()?.trim() || '';
+
+      } else {
+        throw new Error(`Unsupported model type: ${model}`);
+      }
+
+      // Clean the response (remove potential markdown fences)
+      aiGeneratedMarkdown = this.cleanResponse(aiGeneratedMarkdown); // Reuse existing cleaner
+
+      if (!aiGeneratedMarkdown) {
+         console.warn("CreatorAgentService (EditorAction): AI returned an empty response.");
+         // Decide on fallback: empty string or original content? Let's use empty for now.
+      }
+
+      console.log(`CreatorAgentService (EditorAction): Successfully generated markdown (length: ${aiGeneratedMarkdown.length}).`);
+
+      // Return the structured response for the editor event
+      return {
+        type: 'modification',
+        action: 'replace',
+        targetBlockIds: selectedBlockIds, // Return the original IDs
+        newMarkdown: aiGeneratedMarkdown
+      };
+
+    } catch (error: any) {
+      console.error('CreatorAgentService (EditorAction): Error processing editor action:', error);
+       if (error instanceof Error) {
+         console.error(`CreatorAgentService (EditorAction): Detailed error: [${error.name}] ${error.message}`);
+         if ('cause' in error) console.error('CreatorAgentService: Error Cause:', error.cause);
+       } else {
+         console.error('CreatorAgentService: An unknown error occurred:', error);
+       }
+       
+      // Rethrow or return a specific error structure? Rethrowing for now.
+      // Or, return an empty modification to avoid breaking the flow?
+      // Let's return an empty modification with an error message for graceful failure.
+       return {
+         type: 'modification',
+         action: 'replace',
+         targetBlockIds: selectedBlockIds,
+         newMarkdown: `[AI Error: Failed to process modification - ${error.message || 'Unknown Error'}]`
+       };
+    }
+  }
+  // --- END NEW Process Editor Action ---
 } 

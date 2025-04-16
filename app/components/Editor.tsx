@@ -5,85 +5,75 @@ import { type Block, type Selection, type BlockNoteEditor as BlockNoteEditorType
 import dynamic from 'next/dynamic';
 import { isEqual } from 'lodash-es'; // Import isEqual
 import LoopOutlinedIcon from '@mui/icons-material/LoopOutlined'; // NEW: Import LoopOutlinedIcon
+import { BlockNoteView } from '@blocknote/mantine'; // Standard import
+import AskAIButton from './AskAIButton'; // Standard import
 
 // Dynamically import BlockNote components with SSR disabled
 const BlockNoteEditor = dynamic(
   () => import('@blocknote/react').then((mod) => {
-    return {
-      default: (props: any) => {
-        const { useCreateBlockNote, useBlockNoteEditor } = mod;
-        const { BlockNoteView } = require('@blocknote/mantine');
-        
-        // Ref to track previous artifact ID
-        const prevArtifactIdRef = React.useRef(props.artifactId);
-        // --- NEW: Ref to track programmatic changes ---
-        const isProgrammaticChangeRef = React.useRef(false);
-        // --- END NEW ---
-
-        // Create editor with image upload support
-        const editor = useCreateBlockNote({
-          // Set initial content once, effect handles updates on artifact change
-          initialContent: props.initialContent && props.initialContent.length > 0 
-            ? props.initialContent 
-            : [{
-                id: "default",
-                type: "paragraph",
-                props: { 
-                  textColor: "default", 
-                  backgroundColor: "default", 
-                  textAlignment: "left" 
-                },
-                content: [],
-                children: []
-              }],
-          uploadFile: async (file) => {
-            // Check if file is an image
-            if (!file.type.startsWith('image/')) {
-              throw new Error('Only image files are supported');
-            }
-            
-            // Check file size (10MB max)
-            if (file.size > 10 * 1024 * 1024) {
-              throw new Error('Image size should be less than 10MB');
-            }
-            
-            try {
-              // Check if we have an artifact ID and user ID for storing in Supabase
-              if (props.artifactId && props.userId) {
-                // Import the ImageService
-                const { ImageService } = await import('../lib/services/ImageService');
-                
-                // Convert the file to a data URL first
-                const dataUrl = await new Promise<string>((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onload = (e) => resolve(e.target?.result as string);
-                  reader.onerror = reject;
-                  reader.readAsDataURL(file);
-                });
-                
-                // Upload the image to Supabase
-                const imageUrl = await ImageService.uploadArtifactImage(
-                  props.userId,
-                  props.artifactId,
-                  dataUrl
-                );
-                
-                // Return the public URL from Supabase
-                return imageUrl;
-              } else {
-                // Fall back to local data URL if not connected to Supabase
-                return new Promise((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onload = (e) => {
-                    resolve(e.target?.result as string);
-                  };
-                  reader.onerror = reject;
-                  reader.readAsDataURL(file);
-                });
-              }
-            } catch (error) {
-              console.error('Error uploading image:', error);
-              // Fall back to local data URL on error
+    // --- Re-enable Toolbar Imports --- 
+    const {
+      useCreateBlockNote,
+      FormattingToolbarController, // RE-ENABLED
+      FormattingToolbar,         // RE-ENABLED
+      BlockTypeSelect,           // RE-ENABLED (standard button)
+      BasicTextStyleButton,    // RE-ENABLED (standard button)
+      TextAlignButton,         // RE-ENABLED (standard button)
+      ColorStyleButton,        // RE-ENABLED (standard button)
+      NestBlockButton,         // RE-ENABLED (standard button)
+      UnnestBlockButton,       // RE-ENABLED (standard button)
+      CreateLinkButton         // RE-ENABLED (standard button)
+    } = mod;
+    // --- END Re-enable ---
+    
+    // --- Return the actual component definition --- 
+    return (props: any) => {
+      // --- Hooks and logic go inside the component --- 
+      const editor = useCreateBlockNote({
+        initialContent: props.initialContent && props.initialContent.length > 0 
+          ? props.initialContent 
+          : [{
+              id: "default",
+              type: "paragraph",
+              props: { 
+                textColor: "default", 
+                backgroundColor: "default", 
+                textAlignment: "left" 
+              },
+              content: [],
+              children: []
+            }],
+        uploadFile: async (file) => {
+          // Check if file is an image
+          if (!file.type.startsWith('image/')) {
+            throw new Error('Only image files are supported');
+          }
+          // Check file size (10MB max)
+          if (file.size > 10 * 1024 * 1024) {
+            throw new Error('Image size should be less than 10MB');
+          }
+          try {
+            // Check if we have an artifact ID and user ID for storing in Supabase
+            if (props.artifactId && props.userId) {
+              // Import the ImageService
+              const { ImageService } = await import('../lib/services/ImageService');
+              // Convert the file to a data URL first
+              const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target?.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              // Upload the image to Supabase
+              const imageUrl = await ImageService.uploadArtifactImage(
+                props.userId,
+                props.artifactId,
+                dataUrl
+              );
+              // Return the public URL from Supabase
+              return imageUrl;
+            } else {
+              // Fall back to local data URL if not connected to Supabase
               return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -93,228 +83,220 @@ const BlockNoteEditor = dynamic(
                 reader.readAsDataURL(file);
               });
             }
-          }
-        });
-        
-        // --- NEW: Call onEditorReady when editor is created --- //
-        React.useEffect(() => {
-          if (editor && props.onEditorReady) {
-            props.onEditorReady(editor);
-          }
-        }, [editor, props.onEditorReady]);
-        // --- END: Call onEditorReady --- //
-
-        // --- NEW: Explicitly update editor content on initialContent change ---
-        React.useEffect(() => {
-          if (editor && props.initialContent) {
-            // Quick length check before expensive deep comparison
-            const lengthDiffers = props.initialContent.length !== editor.document.length;
-            
-            // Only perform deep comparison if lengths differ or if we have to (forced updates)
-            if (lengthDiffers || (props.forceContentUpdate === true) || 
-                (!lengthDiffers && !isEqual(props.initialContent[0], editor.document[0]))) {
-                
-              // Now perform full isEqual only if necessary
-              if (lengthDiffers || props.forceContentUpdate === true || 
-                  !isEqual(props.initialContent, editor.document)) {
-                // console.log(`Editor: Detected change in initialContent for artifact ${props.artifactId}. Replacing blocks.`);
-                // --- NEW: Set flag before programmatic change ---
-                isProgrammaticChangeRef.current = true;
-                // --- END NEW ---
-                editor.replaceBlocks(editor.document, props.initialContent);
-              }
-            }
-          }
-          // Dependency: Run when editor instance exists or initialContent prop changes.
-        }, [editor, props.initialContent, props.artifactId, props.forceContentUpdate]); 
-        // --- END: Explicit update effect ---
-
-        // Handle editor:setContent
-        React.useEffect(() => {
-          const handleSetContent = async (event: CustomEvent) => {
-            if (event.detail && typeof event.detail.content === 'string') {
-              const markdownString = event.detail.content;
-              // Extract the artifactId from the event if provided
-              const sourceArtifactId = event.detail.artifactId;
-              
-              // Only log in development mode
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`Editor: Received setContent event with artifactId: ${sourceArtifactId}`);
-              }
-              
-              if (!markdownString) {
-                editor.replaceBlocks(editor.document, []);
-                if (props.onChange) props.onChange([], sourceArtifactId); // Pass artifactId to onChange
-                return;
-              }
-              try {
-                // Use props.setAiStatus if available
-                if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Parsing content...' });
-                const newBlocks = await editor.tryParseMarkdownToBlocks(markdownString);
-                editor.replaceBlocks(editor.document, newBlocks);
-                // Use props.onChange if available
-                if (props.onChange) {
-                  props.onChange(newBlocks, sourceArtifactId); // Pass artifactId to onChange
-                }
-                if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1500);
-              } catch (error) {
-                console.error('Editor (Inner): Error parsing markdown:', error);
-                if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error parsing content' });
-              }
-            }
-          };
-          window.addEventListener('editor:setContent', handleSetContent as unknown as EventListener);
-          return () => window.removeEventListener('editor:setContent', handleSetContent as unknown as EventListener);
-        // Add necessary props to dependency array
-        }, [editor, props.onChange, props.setAiStatus]); 
-
-        // *** NEW: Handle editor:applyModification ***
-        const handleApplyModification = React.useCallback(async (event: CustomEvent) => {
-          if (!editor) return;
-
-          const detail = event.detail;
-
-          // Phase 1: Handle single/contiguous modification
-          if (detail.type === 'modification' && detail.action === 'replace' && detail.targetBlockIds && detail.newMarkdown) {
-            const { targetBlockIds, newMarkdown } = detail;
-            console.log(`Editor: Applying modification to blocks: ${targetBlockIds.join(', ')}`);
-            if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Applying changes...' });
-
-            try {
-              const newBlocks = await editor.tryParseMarkdownToBlocks(newMarkdown);
-
-              // Find target blocks in the current document
-              const targetBlocks: Block[] = targetBlockIds
-                .map((id: string) => editor.document.find((block: Block) => block.id === id))
-                .filter((block: Block | undefined): block is Block => block !== undefined);
-
-              if (targetBlocks.length !== targetBlockIds.length) {
-                console.error("Editor: Could not find all target blocks for replacement.", { targetBlockIds, foundBlocks: targetBlocks.map(b => b.id) });
-                throw new Error("Target block(s) not found in current document.");
-              }
-              
-              // TODO: Optionally add contiguity check here for Phase 1 if strictness needed
-
-              editor.replaceBlocks(targetBlocks, newBlocks);
-
-              console.log('Editor: Modification applied successfully.');
-              if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
-
-              // Trigger onChange after modification if needed (consider debouncing/throttling)
-              if (props.onChange) {
-                 // Give editor state a moment to settle before reporting change
-                 setTimeout(() => {
-                    if (editor) { // Check editor still exists
-                         props.onChange(editor.document);
-                     }
-                 }, 100);
-              }
-
-            } catch (error) {
-              console.error('Editor: Error applying modification:', error);
-              if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error applying changes' });
-            }
-          } else {
-            // Handle Phase 2 multi_modification or other types in the future
-            console.warn('Editor: Received modification event with unhandled structure for Phase 1.', detail);
-          }
-        }, [editor, props.onChange, props.setAiStatus]); // Dependencies for the handler
-
-        // Add the new listener for modifications
-        React.useEffect(() => {
-          window.addEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
-          return () => window.removeEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
-        }, [editor, handleApplyModification]); // Add handler to dependencies
-
-        // Handle editor:requestContent - MODIFIED to include selection IDs
-        React.useEffect(() => {
-          const handleContentRequest = async () => {
-            if (!editor) return; // Ensure editor exists
-
-            let markdownString: string | null = null;
-            let errorMsg: string | null = null;
-            let selectedBlockIds: string[] = [];
-
-            const currentBlocks = props.currentContent || editor.document;
-
-            try {
-              // Get markdown
-              markdownString = await editor.blocksToMarkdownLossy(currentBlocks);
-
-              // Get selected block IDs
-              // Cast to 'any' to bypass Selection generic type error temporarily
-              const currentSelection: any = editor.getSelection(); 
-              if (currentSelection && currentSelection.blocks) {
-                  // If blocks are selected (highlighted)
-                  selectedBlockIds = currentSelection.blocks.map((block: Block) => block.id);
-              // Check if selection is collapsed (cursor) and anchor exists
-              } else if (currentSelection && !currentSelection.blocks && currentSelection.anchor) { 
-                  const anchorBlockId = currentSelection.anchor.blockId;
-                  // If it's just a cursor (collapsed selection), find the block containing the cursor
-                  const anchorBlock = editor.document.find((block: Block) => block.id === anchorBlockId);
-                  if (anchorBlock) {
-                      selectedBlockIds = [anchorBlock.id];
-                  }
-              }
-              
-              // Use props.onContentAccessRequest if available (existing logic)
-              if (props.onContentAccessRequest) {
-                props.onContentAccessRequest(currentBlocks);
-              }
-            } catch (error) {
-              console.error('Editor (Inner): Error processing content request:', error);
-              errorMsg = 'Failed to get editor content or selection';
-            }
-
-            // Include selectedBlockIds in the response detail
-            const responseEvent = new CustomEvent('editor:contentResponse', {
-              detail: { markdown: markdownString, selectedBlockIds, error: errorMsg }
+          } catch (error) {
+            console.error('Error uploading image:', error);
+            // Fall back to local data URL on error
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                resolve(e.target?.result as string);
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
             });
-            window.dispatchEvent(responseEvent);
-          };
-          window.addEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
-          return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
-        }, [editor, props.onContentAccessRequest, props.currentContent]); // Dependencies for the handler
-
-        // *** MODIFIED onChange handler: Check programmatic change flag ***
-        React.useEffect(() => {
-          if (!props.onChange) return;
-
-          const handleChange = () => {
-            // --- NEW: Check programmatic change flag ---
-            if (isProgrammaticChangeRef.current) {
-              // console.log("Editor onChange: Ignored programmatic change.");
-              // Reset the flag AFTER the current event stack clears
-              setTimeout(() => {
-                isProgrammaticChangeRef.current = false;
-              }, 0);
-              return; // Do not call props.onChange
+          }
+        }
+      });
+      
+      // --- Ref to track programmatic changes ---
+      const isProgrammaticChangeRef = React.useRef(false);
+      
+      // --- Call onEditorReady when editor is created --- 
+      React.useEffect(() => {
+        if (editor && props.onEditorReady) {
+          props.onEditorReady(editor);
+        }
+      }, [editor, props.onEditorReady]);
+      // --- END: Call onEditorReady --- 
+      
+      // --- Explicitly update editor content on initialContent change ---
+      React.useEffect(() => {
+        if (editor && props.initialContent) {
+          const lengthDiffers = props.initialContent.length !== editor.document.length;
+          if (lengthDiffers || (props.forceContentUpdate === true) || 
+              (!lengthDiffers && !isEqual(props.initialContent[0], editor.document[0]))) {
+            if (lengthDiffers || props.forceContentUpdate === true || 
+                !isEqual(props.initialContent, editor.document)) {
+              isProgrammaticChangeRef.current = true;
+              editor.replaceBlocks(editor.document, props.initialContent);
             }
-            // --- END NEW ---
-            
-            // If it's a user change, proceed as before
-            // console.log("Editor onChange: Processing user change.");
-            props.onChange(editor.document); 
-          };
+          }
+        }
+      }, [editor, props.initialContent, props.artifactId, props.forceContentUpdate]); 
+      // --- END: Explicit update effect ---
+      
+      // --- Handle editor:setContent ---
+      React.useEffect(() => {
+        const handleSetContent = async (event: CustomEvent) => {
+          if (event.detail && typeof event.detail.content === 'string') {
+            const markdownString = event.detail.content;
+            const sourceArtifactId = event.detail.artifactId;
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`Editor: Received setContent event with artifactId: ${sourceArtifactId}`);
+            }
+            if (!markdownString) {
+              editor.replaceBlocks(editor.document, []);
+              if (props.onChange) props.onChange([], sourceArtifactId);
+              return;
+            }
+            try {
+              if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Parsing content...' });
+              const newBlocks = await editor.tryParseMarkdownToBlocks(markdownString);
+              isProgrammaticChangeRef.current = true; // Set flag before replaceBlocks
+              editor.replaceBlocks(editor.document, newBlocks);
+              if (props.onChange) {
+                props.onChange(newBlocks, sourceArtifactId);
+              }
+              if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1500);
+            } catch (error) {
+              console.error('Editor (Inner): Error parsing markdown:', error);
+              if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error parsing content' });
+            }
+          }
+        };
+        window.addEventListener('editor:setContent', handleSetContent as unknown as EventListener);
+        return () => window.removeEventListener('editor:setContent', handleSetContent as unknown as EventListener);
+      }, [editor, props.onChange, props.setAiStatus]); 
+      // --- END Handle editor:setContent ---
+      
+      // --- Handle editor:applyModification ---
+      const handleApplyModification = React.useCallback(async (event: CustomEvent) => {
+        if (!editor) return;
+        const detail = event.detail;
+        if (detail.type === 'modification' && detail.action === 'replace' && detail.targetBlockIds && detail.newMarkdown) {
+          const { targetBlockIds, newMarkdown } = detail;
+          console.log(`Editor: Applying modification to blocks: ${targetBlockIds.join(', ')}`);
+          if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Applying changes...' });
+          try {
+            const newBlocks = await editor.tryParseMarkdownToBlocks(newMarkdown);
+            const targetBlocks: Block[] = targetBlockIds
+              .map((id: string) => editor.document.find((block: Block) => block.id === id))
+              .filter((block: Block | undefined): block is Block => block !== undefined);
+            if (targetBlocks.length !== targetBlockIds.length) {
+              console.error("Editor: Could not find all target blocks for replacement.", { targetBlockIds, foundBlocks: targetBlocks.map(b => b.id) });
+              throw new Error("Target block(s) not found in current document.");
+            }
+            isProgrammaticChangeRef.current = true; // Set flag before replaceBlocks
+            editor.replaceBlocks(targetBlocks, newBlocks);
+            console.log('Editor: Modification applied successfully.');
+            if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
+            if (props.onChange) {
+               setTimeout(() => {
+                  if (editor) { 
+                       props.onChange(editor.document);
+                   }
+               }, 100);
+            }
+          } catch (error) {
+            console.error('Editor: Error applying modification:', error);
+            if (props.setAiStatus) props.setAiStatus({ isProcessing: false, message: 'Error applying changes' });
+          }
+        } else {
+          console.warn('Editor: Received modification event with unhandled structure for Phase 1.', detail);
+        }
+      }, [editor, props.onChange, props.setAiStatus]);
+      
+      React.useEffect(() => {
+        window.addEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
+        return () => window.removeEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
+      }, [editor, handleApplyModification]);
+      // --- END Handle editor:applyModification ---
+      
+      // --- Handle editor:requestContent ---
+      React.useEffect(() => {
+        const handleContentRequest = async () => {
+          if (!editor) return;
+          let markdownString: string | null = null;
+          let errorMsg: string | null = null;
+          let selectedBlockIds: string[] = [];
+          const currentBlocks = props.currentContent || editor.document;
+          try {
+            markdownString = await editor.blocksToMarkdownLossy(currentBlocks);
+            const currentSelection: any = editor.getSelection(); 
+            if (currentSelection && currentSelection.blocks) {
+                selectedBlockIds = currentSelection.blocks.map((block: Block) => block.id);
+            } else if (currentSelection && !currentSelection.blocks && currentSelection.anchor) { 
+                const anchorBlockId = currentSelection.anchor.blockId;
+                const anchorBlock = editor.document.find((block: Block) => block.id === anchorBlockId);
+                if (anchorBlock) {
+                    selectedBlockIds = [anchorBlock.id];
+                }
+            }
+            if (props.onContentAccessRequest) {
+              props.onContentAccessRequest(currentBlocks);
+            }
+          } catch (error) {
+            console.error('Editor (Inner): Error processing content request:', error);
+            errorMsg = 'Failed to get editor content or selection';
+          }
+          const responseEvent = new CustomEvent('editor:contentResponse', {
+            detail: { markdown: markdownString, selectedBlockIds, error: errorMsg }
+          });
+          window.dispatchEvent(responseEvent);
+        };
+        window.addEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
+        return () => window.removeEventListener('editor:requestContent', handleContentRequest as unknown as EventListener);
+      }, [editor, props.onContentAccessRequest, props.currentContent]);
+      // --- END Handle editor:requestContent ---
+      
+      // --- onChange handler: Check programmatic change flag ---
+      React.useEffect(() => {
+        if (!props.onChange) return;
+        const handleChange = () => {
+          if (isProgrammaticChangeRef.current) {
+            setTimeout(() => {
+              isProgrammaticChangeRef.current = false;
+            }, 0);
+            return;
+          }
+          props.onChange(editor.document);
+        };
+        editor.onChange(handleChange);
+        return () => {
+          // Cleanup might go here if needed
+        };
+      }, [editor, props.onChange]);
+      // --- END onChange handler ---
+      
+      // --- The actual JSX return - Modified to include Toolbar --- 
+      return (
+        // --- Wrap view with Toolbar Controller --- 
+        <BlockNoteView 
+          editor={editor} 
+          theme={props.theme || "light"} 
+          className="bn-editor"
+          // Provide the toolbar via the controller
+          formattingToolbar={false} // Disable default floating toolbar
+        >
+          <FormattingToolbarController
+            formattingToolbar={() => (
+              <FormattingToolbar>
+                {/* Custom Ask AI Button - Moved to first position */}
+                <AskAIButton key={"askAIButton"} editor={editor} /> 
+                
+                {/* Standard Buttons */}
+                <BlockTypeSelect key={"blockTypeSelect"} />
+                <BasicTextStyleButton basicTextStyle={"bold"} key={"boldStyleButton"} />
+                <BasicTextStyleButton basicTextStyle={"italic"} key={"italicStyleButton"} />
+                <BasicTextStyleButton basicTextStyle={"underline"} key={"underlineStyleButton"} />
+                <BasicTextStyleButton basicTextStyle={"code"} key={"codeStyleButton"} />
+                <TextAlignButton textAlignment={"left"} key={"textAlignLeftButton"} />
+                <TextAlignButton textAlignment={"center"} key={"textAlignCenterButton"} />
+                <TextAlignButton textAlignment={"right"} key={"textAlignRightButton"} />
+                <ColorStyleButton key={"colorStyleButton"} />
+                <NestBlockButton key={"nestBlockButton"} />
+                <UnnestBlockButton key={"unnestBlockButton"} />
+                <CreateLinkButton key={"createLinkButton"} />
 
-          editor.onChange(handleChange);
-
-          // Cleanup (Note: BlockNote might not have a public API to remove onChange listeners)
-          // The key prop should handle component recreation on artifactId change.
-          return () => {
-            // Attempt cleanup if API becomes available or needed
-          };
-        }, [editor, props.onChange]); // Dependencies remain the same
-
-        return (
-          <BlockNoteView 
-            editor={editor} 
-            theme={props.theme || "light"} 
-            className="bn-editor"
+              </FormattingToolbar>
+            )}
           />
-        );
-      }
+        </BlockNoteView>
+        // --- END Toolbar Integration --- 
+      );
+      // --- END JSX Return --- 
     };
+    // --- END Component Definition --- 
   }),
   { ssr: false }
 );

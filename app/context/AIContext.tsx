@@ -103,6 +103,11 @@ interface AIContextType {
   updateEditorContext: (context?: EditorContext) => void;
   getCurrentEditorContext: () => EditorContext | undefined;
   findConversationByArtifactId: (artifactId: string) => Conversation | undefined;
+  processEditorSelectionAction: (
+    instruction: string,
+    selectedBlockIds: string[],
+    fullContextMarkdown: string
+  ) => Promise<void>;
 }
 
 // Create the AI context
@@ -460,6 +465,98 @@ export function AIProvider({ children }: AIProviderProps) {
   }, [conversationHistory]);
   // --- END Helper ---
 
+  // --- NEW: Implement function for editor actions --- 
+  const processEditorSelectionAction = useCallback(async (
+    instruction: string,
+    selectedBlockIds: string[],
+    fullContextMarkdown: string
+  ) => {
+    console.log('--- [AIContext] processEditorSelectionAction Called ---');
+    console.log('Instruction:', instruction);
+    console.log('Selected Block IDs:', selectedBlockIds);
+    console.log('Full Context Markdown:', fullContextMarkdown.substring(0, 100) + (fullContextMarkdown.length > 100 ? '...' : ''));
+
+    if (!currentConversation) {
+      console.error('processEditorSelectionAction: No current conversation found.');
+      toast.error("Cannot process action: No active conversation.");
+      return;
+    }
+    // --- NEW: Check for artifactId --- 
+    if (!currentConversation.artifactId) {
+        console.error('processEditorSelectionAction: Current conversation has no linked artifactId.');
+        toast.error("Cannot process action: Conversation not linked to an artifact.");
+        return;
+    }
+    // --- END Check --- 
+
+    setIsLoading(true); // Use context loading state
+    let modificationResult = null; // Define outside try block
+
+    try {
+      // --- MODIFIED: Call Actual Backend Service --- 
+      console.log(`Calling CreatorAgentService.processEditorAction for artifact: ${currentConversation.artifactId}`);
+      
+      // Ensure artifactId is not undefined before passing
+      if (!currentConversation.artifactId) {
+        throw new Error("Cannot process action: Conversation not linked to an artifact.");
+      }
+
+      modificationResult = await CreatorAgentService.processEditorAction(
+        instruction,
+        selectedBlockIds,
+        fullContextMarkdown, // Pass full context
+        currentModel, // Pass the currently selected model
+        currentConversation.artifactId // Pass artifact ID for context
+      );
+      // --- END MODIFIED --- 
+      
+      /* --- REMOVED Simulation Block ---
+      // *** Simulating Backend Call & Response ***
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+      modificationResult = { // Assign to outer variable
+        type: 'modification',
+        action: 'replace',
+        targetBlockIds: selectedBlockIds,
+        // --- MODIFIED SIMULATION: Use full context in log, but keep structure ---
+        newMarkdown: `**AI Modified Content (Simulated based on instruction and context):**\n*Instruction: ${instruction}*`
+        // Note: Real implementation needs AI to generate this based on instruction,
+        // fullContextMarkdown, targeting selectedBlockIds
+        // --- END MODIFIED SIMULATION ---
+      };
+      console.log("Simulated backend response:", modificationResult);
+      // --- End Simulation --- 
+      --- END REMOVED --- */
+
+      // --- NEW: Validate the structure of the response --- 
+      if (
+        !modificationResult ||
+        modificationResult.type !== 'modification' ||
+        modificationResult.action !== 'replace' ||
+        !Array.isArray(modificationResult.targetBlockIds) ||
+        typeof modificationResult.newMarkdown !== 'string'
+      ) {
+        throw new Error("Invalid modification response structure from backend.");
+      }
+      // --- END Validation --- 
+
+      // Dispatch 'editor:applyModification' event with the result
+      console.log("Dispatching editor:applyModification with:", modificationResult);
+       const applyEvent = new CustomEvent('editor:applyModification', {
+         detail: modificationResult 
+       });
+       window.dispatchEvent(applyEvent);
+       toast.success("AI modification applied!"); // Give feedback
+
+    } catch (error) {
+      console.error('Error processing editor selection action:', error);
+      // --- NEW: Show more specific error --- 
+      toast.error(`Failed to apply AI modification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false); // Turn off loading state
+    }
+  }, [currentConversation, currentModel]); // Added dependencies
+  // --- END NEW Implementation ---
+
   // Create a new conversation
   const createNewConversation = async (
     model?: AIModelType, 
@@ -682,8 +779,7 @@ export function AIProvider({ children }: AIProviderProps) {
         const { IntentAgentService } = await import('../lib/services/IntentAgentService');
         intentAnalysis = await IntentAgentService.analyzeIntent(
           content, 
-          editorContext, 
-          isChatPanelCollapsed
+          editorContext
         );
         console.log('Intent analysis:', intentAnalysis);
       } catch (error) {
@@ -872,7 +968,8 @@ export function AIProvider({ children }: AIProviderProps) {
         loadUserConversations,
         updateEditorContext,
         getCurrentEditorContext,
-        findConversationByArtifactId
+        findConversationByArtifactId,
+        processEditorSelectionAction
       }}
     >
       {children}
