@@ -94,7 +94,8 @@ interface AIContextType {
     content: string, 
     imageDataUrl?: string | null, 
     editorContext?: EditorContext, 
-    searchType?: SearchType
+    searchType?: SearchType,
+    isChatPanelCollapsed?: boolean
   ) => Promise<void>;
   selectConversation: (id: string) => void;
   switchModel: (model: AIModelType) => void;
@@ -580,9 +581,10 @@ export function AIProvider({ children }: AIProviderProps) {
     content: string, 
     imageDataUrl?: string | null,
     editorContext?: EditorContext,
-    searchType?: SearchType
+    searchType?: SearchType,
+    isChatPanelCollapsed?: boolean
   ) => {
-    console.log(`[AIContext] sendMessage called. Search Type: ${searchType || 'Default (Web)'}`);
+    console.log(`[AIContext] sendMessage called. Search Type: ${searchType || 'Default (Web)'}, Panel Collapsed: ${isChatPanelCollapsed}`);
     // Add detailed logging about the current conversation and its artifact ID
     console.log(`[AIContext] sendMessage called with current conversation ID: ${currentConversation?.id}`);
     console.log(`[AIContext] Current conversation artifact ID: ${currentConversation?.artifactId}`);
@@ -678,7 +680,11 @@ export function AIProvider({ children }: AIProviderProps) {
       let intentAnalysis: IntentAnalysisResult;
       try {
         const { IntentAgentService } = await import('../lib/services/IntentAgentService');
-        intentAnalysis = await IntentAgentService.analyzeIntent(content, editorContext);
+        intentAnalysis = await IntentAgentService.analyzeIntent(
+          content, 
+          editorContext, 
+          isChatPanelCollapsed
+        );
         console.log('Intent analysis:', intentAnalysis);
       } catch (error) {
         console.error('Error analyzing intent:', error);

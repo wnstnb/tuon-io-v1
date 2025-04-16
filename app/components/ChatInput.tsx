@@ -12,9 +12,10 @@ type SearchType = 'web' | 'exaAnswer';
 // Optional prop to receive editor context from parent components
 interface ChatInputProps {
   editorContext?: EditorContext;
+  isPanelCollapsed?: boolean;
 }
 
-export default function ChatInput({ editorContext: initialEditorContext }: ChatInputProps = {}) {
+export default function ChatInput({ editorContext: initialEditorContext, isPanelCollapsed = false }: ChatInputProps = {}) {
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -198,12 +199,13 @@ export default function ChatInput({ editorContext: initialEditorContext }: ChatI
       clearSelectedImage();
     }
     
-    // Call sendMessage, always passing the current searchType
+    // Call sendMessage, always passing the current searchType and panel state
     await sendMessage(
       userMessage, 
       imageDataUrl, 
       enhancedEditorContext, 
-      searchType
+      searchType,
+      isPanelCollapsed
     );
 
   };

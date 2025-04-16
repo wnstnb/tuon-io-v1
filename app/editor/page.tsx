@@ -1407,7 +1407,7 @@ function EditorPageContent() {
         {!showRightPanel && (
           <div className="pinned-chat-input-container">
             {/* Render ChatInput directly here when panel is collapsed */}
-            <ChatInput />
+            <ChatInput isPanelCollapsed={!showRightPanel} />
           </div>
         )}
 
