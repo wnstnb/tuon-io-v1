@@ -169,23 +169,60 @@ const BlockNoteEditor = dynamic(
           if (props.setAiStatus) props.setAiStatus({ isProcessing: true, message: 'Applying changes...' });
           try {
             const newBlocks = await editor.tryParseMarkdownToBlocks(newMarkdown);
-            const targetBlocks: Block[] = targetBlockIds
-              .map((id: string) => editor.document.find((block: Block) => block.id === id))
-              .filter((block: Block | undefined): block is Block => block !== undefined);
+
+            // --- NEW: Recursive Block Search Function ---
+            const findBlocksByIdRecursive = (
+              blockIds: string[],
+              blocksToSearch: Block[]
+            ): Block[] => {
+              let foundBlocks: Block[] = [];
+              const remainingIds = new Set(blockIds); // Keep track of IDs still needed
+
+              const search = (currentBlocks: Block[]) => {
+                if (remainingIds.size === 0) return; // Stop if all found
+
+                for (const block of currentBlocks) {
+                  if (remainingIds.has(block.id)) {
+                    foundBlocks.push(block);
+                    remainingIds.delete(block.id); // Mark as found
+                  }
+                  if (block.children && block.children.length > 0 && remainingIds.size > 0) {
+                    search(block.children); // Recursively search children
+                  }
+                  if (remainingIds.size === 0) break; // Stop early if all found
+                }
+              };
+
+              search(blocksToSearch); // Start search from the provided blocks
+              return foundBlocks;
+            };
+            // --- END NEW ---
+
+            // --- MODIFIED: Use recursive search ---
+            const targetBlocks = findBlocksByIdRecursive(targetBlockIds, editor.document);
+            // --- END MODIFIED ---
+
             if (targetBlocks.length !== targetBlockIds.length) {
-              console.error("Editor: Could not find all target blocks for replacement.", { targetBlockIds, foundBlocks: targetBlocks.map(b => b.id) });
-              throw new Error("Target block(s) not found in current document.");
+              // Find which IDs were missing
+              const foundIds = new Set(targetBlocks.map(b => b.id));
+              const missingIds = targetBlockIds.filter((id: string) => !foundIds.has(id));
+              console.error(
+                "Editor: Could not find all target blocks for replacement.",
+                { targetBlockIds, foundBlockIds: Array.from(foundIds), missingIds }
+              );
+              throw new Error(`Target block(s) not found in current document: ${missingIds.join(', ')}`);
             }
+
             isProgrammaticChangeRef.current = true; // Set flag before replaceBlocks
             editor.replaceBlocks(targetBlocks, newBlocks);
             console.log('Editor: Modification applied successfully.');
             if (props.setAiStatus) setTimeout(() => props.setAiStatus({ isProcessing: false }), 1000);
             if (props.onChange) {
                setTimeout(() => {
-                  if (editor) { 
-                       props.onChange(editor.document);
+                  if (editor) {
+                       props.onChange(editor.document); // Trigger onChange with the updated document
                    }
-               }, 100);
+               }, 100); // Small delay to ensure state updates propagate
             }
           } catch (error) {
             console.error('Editor: Error applying modification:', error);
@@ -194,7 +231,7 @@ const BlockNoteEditor = dynamic(
         } else {
           console.warn('Editor: Received modification event with unhandled structure for Phase 1.', detail);
         }
-      }, [editor, props.onChange, props.setAiStatus]);
+      }, [editor, props.onChange, props.setAiStatus]); // Added props.setAiStatus
       
       React.useEffect(() => {
         window.addEventListener('editor:applyModification', handleApplyModification as unknown as EventListener);
