@@ -348,8 +348,23 @@ export function FileExplorer() {
 
     const handleActivate = useCallback((node: NodeApi<TreeNodeData>) => {
         if (node.data.type === 'artifact') {
-            console.log(`FileExplorer: Activating artifact: ${node.data.originalId}`);
-            router.push(`/editor?artifactId=${node.data.originalId}`);
+            const artifactId = node.data.originalId;
+            console.log(`FileExplorer: Activating artifact: ${artifactId}`);
+            
+            // --- DISPATCH EVENT --- 
+            // Dispatch event for EditorPageContent to listen to
+            if (window) {
+              window.dispatchEvent(new CustomEvent('artifactSelected', { 
+                detail: { artifactId: artifactId }
+              }));
+              console.log(`FileExplorer: Dispatched 'artifactSelected' event for ${artifactId}`);
+            } else {
+              console.error("FileExplorer: Cannot dispatch event, window object not available.");
+            }
+            // --- END DISPATCH --- 
+            
+            // Also update the URL
+            router.push(`/editor?artifactId=${artifactId}`);
         }
         // Optional: Handle folder activation differently if needed
     }, [router]);

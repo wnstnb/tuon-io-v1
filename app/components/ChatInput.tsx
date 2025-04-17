@@ -248,7 +248,7 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Send a message or paste an image..."
+              placeholder="What do you want to focus on?"
               disabled={isLoading}
               rows={1}
               className="chat-textarea"

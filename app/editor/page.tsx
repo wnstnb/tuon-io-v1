@@ -559,90 +559,19 @@ function EditorPageContent() {
   }, []);
   // --- END Editor Reference Setter --- //
 
-  // --- UPDATED: Handle Title Changes ---
-  const handleTitleChange = useCallback((newTitle: string) => {
-    if (isMounted.current) {
-      setTitle(newTitle);
-      setIsDirty(true); // Mark editor as dirty
-      setLastSyncError(null); // Clear error when user types
-      setUserHasManuallySetTitle(true); // NEW: Mark that user has manually set the title
-      // Trigger the debounce on title change, passing current editorContent and new title
-      debouncedLocalSave(editorContent, newTitle);
-    }
-  }, [debouncedLocalSave, editorContent, userHasManuallySetTitle]); // Added editorContent dependency
-
-  // --- UPDATED: Handle Content Changes ---
-  const handleContentChange = useCallback((content: Block[], sourceArtifactId?: string) => {
-    // if (process.env.NODE_ENV === 'development') console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
-    
-    // Check if content is coming from a different artifact (AI generation)
-    if (sourceArtifactId && sourceArtifactId !== currentArtifactId) {
-      if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT ID MISMATCH] Content change includes source artifactId ${sourceArtifactId}, different from current ${currentArtifactId}`);
-      if (process.env.NODE_ENV === 'development') console.log('This is likely content from AI generation. Using the correct artifact ID to prevent orphaned artifacts.');
-      
-      // First, save the existing data for the current artifact (if any)
-      try {
-        const existingData = localStorage.getItem(`artifact-data-${currentArtifactId}`);
-        if (existingData) {
-          // Save the data with a backup name in case we need to recover it
-          localStorage.setItem(`artifact-data-${currentArtifactId}-backup`, existingData);
-          if (process.env.NODE_ENV === 'development') console.log(`Backed up data for current artifact ${currentArtifactId} before switching`);
-        }
-      } catch (e) {
-        console.error('Error backing up current artifact data:', e);
-      }
-      
-      // Update the current artifact ID to match the source
-      // This ensures we don't create a new artifact when saving AI-generated content
-      setCurrentArtifactId(sourceArtifactId);
-      
-      // Since we're changing currentArtifactId, also update persistence flag
-      // This helps syncToDatabaseCore make the right decision about create vs update
-      setIsArtifactPersisted(true);
-      
-      if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT ID UPDATED] Current artifact ID has been updated to: ${sourceArtifactId}`);
-
-      // Now clear the sync pending for the old artifact ID
-      if (pendingSyncArtifactId !== sourceArtifactId) {
-        // We're switching artifacts, so any pending sync for the old one should be cancelled
-        setPendingSyncArtifactId(sourceArtifactId);
-        if (process.env.NODE_ENV === 'development') console.log(`Cleared pending sync for previous artifact ID, now tracking: ${sourceArtifactId}`);
-      }
-      
-      // Update the URL to match the new artifact ID
-      try {
-        const url = new URL(window.location.href);
-        const currentUrlArtifactId = url.searchParams.get('artifactId');
-        
-        if (currentUrlArtifactId !== sourceArtifactId) {
-          url.searchParams.set('artifactId', sourceArtifactId);
-          window.history.replaceState({}, '', url.toString());
-          if (process.env.NODE_ENV === 'development') console.log(`Updated URL to reflect new artifact ID: ${sourceArtifactId}`);
-        }
-      } catch (e) {
-        console.error('Error updating URL with new artifact ID:', e);
-      }
-    } else {
-      if (sourceArtifactId) {
-        // if (process.env.NODE_ENV === 'development') console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
-      } else {
-        // if (process.env.NODE_ENV === 'development') console.log(`Content change has no source artifactId (likely user edit)`);
-      }
-    }
-    
-    setEditorContent(content); // Update editor content state
-    if (isMounted.current) {
-      setIsDirty(true); // Mark editor as dirty
-      setLastSyncError(null); // Clear error when user types
-      // Trigger the debounce on content change, passing the new content and current title
-      debouncedLocalSave(content, title);
-    }
-  }, [debouncedLocalSave, title, currentArtifactId, pendingSyncArtifactId]); // Updated dependencies
-
-  // Infer title based on content
+  // --- Title Inference Function ---
   const inferTitle = useCallback(async (artifactId: string, contentForInference: Block[]) => {
     if (!user) return; // Need user context
 
+    // --- DIAGNOSTIC LOG ---
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[InferTitle Check - Inside Function]', {
+        userHasManuallySetTitle,
+        currentTitle: title, // Log the title state as seen by this function instance
+        shouldSkip: userHasManuallySetTitle || title !== 'Untitled Artifact',
+      });
+    }
+    // --- END DIAGNOSTIC LOG ---
     // MODIFIED Check: Skip if user manually set the title OR if it's not the default placeholder
     if (userHasManuallySetTitle || title !== 'Untitled Artifact') {
        if (process.env.NODE_ENV === 'development') console.log('Skipping title inference: User manually set title or title is not default.', { userHasManuallySetTitle, currentTitle: title });
@@ -652,12 +581,15 @@ function EditorPageContent() {
     const textContent = extractTextForInference(contentForInference);
 
     if (textContent.length < 20) {
+       if (process.env.NODE_ENV === 'development') console.log('[InferTitle] Skipping due to short content (< 20 chars).');
       return; // Don't infer if content is too short
     }
 
     if (isMounted.current) {
       setIsEditorProcessing(true); // Set processing state to true
     }
+
+    if (process.env.NODE_ENV === 'development') console.log(`[InferTitle] Calling API for artifact ${artifactId}`);
 
     try {
       const response = await fetch('/api/infer-title', {
@@ -674,8 +606,17 @@ function EditorPageContent() {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.title && isMounted.current) {
-          // Update title via the handler to centralize logic (sets isDirty, triggers debounce)
-          handleTitleChange(data.title);
+          if (process.env.NODE_ENV === 'development') console.log(`[InferTitle] API success, received title: "${data.title}"`);
+          
+          // --- MODIFIED: Update state directly instead of calling handleTitleChange ---
+          const inferredTitle = data.title;
+          setTitle(inferredTitle);
+          setIsDirty(true); // Mark as dirty
+          setLastSyncError(null); // Clear errors
+          // Trigger save with the *new* inferred title and the *current* content
+          debouncedLocalSave(editorContent, inferredTitle); 
+          // --- END MODIFICATION ---
+
         } else {
           console.warn('Title inference API call succeeded but returned no title.');
         }
@@ -690,12 +631,11 @@ function EditorPageContent() {
         setIsEditorProcessing(false); // Ensure processing state is set to false
       }
     }
-  }, [user, title, userHasManuallySetTitle, handleTitleChange]); // Added dependencies
+    // Remove handleTitleChange from dependencies, add editorContent and debouncedLocalSave
+  }, [user, title, userHasManuallySetTitle, editorContent, debouncedLocalSave]); 
 
-  // Load an artifact from Supabase
-  // Explicitly type the function signature
+  // --- Load Artifact Function ---
   const loadArtifact: (idToLoad: string, user: User) => Promise<void> = useCallback(async (idToLoad, user) => {
-
     // NEW Check: Prevent UI flash if loading the same ID (e.g., on tab focus)
     if (idToLoad === currentArtifactId && isMounted.current) {
       if (process.env.NODE_ENV === 'development') console.log(`loadArtifact called for the same ID (${idToLoad}) - likely a refresh trigger. Skipping UI flash.`);
@@ -840,13 +780,6 @@ function EditorPageContent() {
       }
       // --- END Conversation Linking --- //
 
-      // Post-load title inference
-      const isPlaceholderTitle = !loadedTitle || loadedTitle === 'Untitled Artifact';
-      // MODIFIED Check: Only infer if title is placeholder AND user hasn't manually set it yet
-      if (isPlaceholderTitle && !initialUserSetTitle && loadedContent.length > 0 && isMounted.current) {
-         setTimeout(() => inferTitle(idToLoad, loadedContent), 500);
-      }
-
     } catch (error) {
       // Catch any unexpected errors during the loading/decision logic
       console.error('Unexpected error during artifact loading process:', error);
@@ -858,224 +791,106 @@ function EditorPageContent() {
         setLastSyncError("Unexpected error loading artifact.");
       }
     }
-  }, [inferTitle, user, currentArtifactId, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]);
+  }, [user, currentArtifactId, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]); // REMOVE inferTitle from here
 
-  // Listen for artifact selection events from FileExplorer
-  useEffect(() => {
-    const handleArtifactSelected = (event: CustomEvent) => {
-      const { artifactId: selectedId } = event.detail;
-      if (selectedId && user && selectedId !== currentArtifactId) {
-        if (process.env.NODE_ENV === 'development') console.log(`Loading artifact from event: ${selectedId}`);
-
-        // Flush any pending local save for the OLD artifact FIRST
-        if (process.env.NODE_ENV === 'development') console.log(`Flushing potential pending save for ${currentArtifactId}...`);
-        debouncedLocalSave.flush(); // <-- Changed from cancel()
-
-        // Now check if sync is pending (could have become true after flush)
-        if (isSyncPending && isMounted.current) { // Check isSyncPending *after* flush
-           console.warn("Switching artifact with pending server changes. Attempting final sync...");
-           // Attempt an immediate sync - use the *latest* function directly
-           latestSyncFn.current(); // Use the ID stored in pendingSyncArtifactId
-        }
-
-        // No need to cancel anymore, we flushed.
-        // debouncedLocalSave.cancel(); // REMOVED
-
-        loadArtifact(selectedId, user);
-      }
-    };
-    window.addEventListener('artifactSelected', handleArtifactSelected as EventListener);
-    return () => {
-      window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
-    };
-    // Removed syncToDatabase dependency, it's handled via latestSyncFn ref now
-    // Ensure debouncedLocalSave ref is stable if added to deps, but likely not needed as it's a stable ref.
-  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]);
-
-  // Load artifact if ID is provided in URL and different from current
-  useEffect(() => {
-    if (artifactIdParam && user && artifactIdParam !== currentArtifactId) {
-      if (process.env.NODE_ENV === 'development') console.log(`Loading artifact from URL: ${artifactIdParam}`);
-
-      // Flush any pending local save for the OLD artifact FIRST
-      if (process.env.NODE_ENV === 'development') console.log(`Flushing potential pending save for ${currentArtifactId}...`);
-      debouncedLocalSave.flush(); // <-- Changed from cancel()
-
-      // Now check if sync is pending (could have become true after flush)
-       if (isSyncPending && isMounted.current) { // Check isSyncPending *after* flush
-           console.warn("Loading from URL with pending server changes. Attempting final sync...");
-           latestSyncFn.current(); // Attempt sync using latest logic (which uses pendingSyncArtifactId)
-       }
-
-       // No need to cancel anymore, we flushed.
-       // debouncedLocalSave.cancel(); // REMOVED
-
-      loadArtifact(artifactIdParam, user);
+  // --- Handle Title Change Function ---
+  const handleTitleChange = useCallback((newTitle: string) => {
+    if (isMounted.current) {
+      if (process.env.NODE_ENV === 'development') console.log(`handleTitleChange called with: "${newTitle}"`);
+      setTitle(newTitle);
+      setIsDirty(true); // Mark editor as dirty
+      setLastSyncError(null); // Clear error when user types
+      setUserHasManuallySetTitle(true); // Mark that user has manually set the title
+      // Trigger the debounce on title change, passing current editorContent and new title
+      // Make sure editorContent is available here
+      debouncedLocalSave(editorContent, newTitle);
     }
-    // Removed syncToDatabase dependency
-    // --- Added AI context dependencies --- //
-    // Ensure debouncedLocalSave ref is stable if added to deps, but likely not needed as it's a stable ref.
-  }, [artifactIdParam, user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]);
+    // Ensure editorContent is a dependency if used directly (it is)
+  }, [debouncedLocalSave, editorContent]); // Removed userHasManuallySetTitle as it's set here
 
-  // --- NEW: beforeunload Handler ---
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      // Check if there are pending changes that haven't been synced
-      if (isSyncPending) {
-        // Optionally, provide a standard message
-        event.preventDefault(); // Standard practice for some browsers
-        event.returnValue = ''; // Standard practice for others
-
-        console.warn("Unload detected with pending changes. Attempting final sync...");
-        // Attempt a final sync using the latest logic directly
-        latestSyncFn.current();
-
-        // Note: Using navigator.sendBeacon might be more reliable here for out-of-band data,
-        // but requires backend changes and is more complex. Sticking with async for now.
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      // Cancel any pending debounced/throttled calls on component unmount
-      debouncedLocalSave.cancel();
-      throttledDbSync.cancel(); // Cancel the throttle wrapper too
-    };
-    // Removed syncToDatabase dependency
-  }, [isSyncPending, debouncedLocalSave, throttledDbSync]);
-
-  // Define the handler function with the correct type using useCallback
-  const handleContentRequest = useCallback(async (event: CustomEvent) => {
-    if (process.env.NODE_ENV === 'development') console.log('EditorPageContent received requestContent event.');
-    if (!editorRef.current) {
-      console.error('Editor ref not available to get markdown.');
-      window.dispatchEvent(new CustomEvent('editor:contentResponse', {
-        detail: { error: 'Editor not ready' }
-      }));
-      return;
-    }
-
-    try {
-      // Generate markdown from current editor state
-      const markdown = await editorRef.current.blocksToMarkdownLossy(editorRef.current.document);
+  // --- Handle Content Change Function ---
+  const handleContentChange = useCallback((content: Block[], sourceArtifactId?: string) => {
+    // if (process.env.NODE_ENV === 'development') console.log(`handleContentChange called with content blocks: ${content.length}, sourceArtifactId: ${sourceArtifactId || 'none'}`);
+    
+    // Check if content is coming from a different artifact (AI generation)
+    if (sourceArtifactId && sourceArtifactId !== currentArtifactId) {
+      if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT ID MISMATCH] Content change includes source artifactId ${sourceArtifactId}, different from current ${currentArtifactId}`);
+      if (process.env.NODE_ENV === 'development') console.log('This is likely content from AI generation. Using the correct artifact ID to prevent orphaned artifacts.');
       
-      // Get selected block IDs
-      const selectedBlockIds = editorRef.current.getSelection()?.blocks.map(b => b.id) || [];
-      
-      if (process.env.NODE_ENV === 'development') console.log('EditorPageContent dispatching contentResponse event.');
-      window.dispatchEvent(new CustomEvent('editor:contentResponse', {
-        detail: { markdown, selectedBlockIds }
-      }));
-    } catch (error) {
-      console.error('Error generating markdown or getting selection:', error);
-      window.dispatchEvent(new CustomEvent('editor:contentResponse', {
-        detail: { error: 'Failed to get editor content' }
-      }));
-    }
-  }, []); // Empty dependency array as handler logic doesn't depend on component state/props
-
-  // Use the correctly typed handler function reference in useEffect
-  useEffect(() => {
-    const listener = (event: Event) => {
-        // Type assertion needed here as addEventListener uses the generic Event type
-        handleContentRequest(event as CustomEvent);
-    };
-    window.addEventListener('editor:requestContent', listener);
-
-    return () => {
-      window.removeEventListener('editor:requestContent', listener);
-    };
-  }, [handleContentRequest]); // Depend on the handler function reference
-  // --- END Event Listener --- //
-
-  // --- NEW useEffect Hook for Processing Image URLs ---
-  useEffect(() => {
-    // Only run if component is mounted and content exists
-    if (!isMounted.current || !editorContent || editorContent.length === 0) {
-      return;
-    }
-
-    let needsProcessing = false;
-    let processingInProgress = false;
-
-    // Recursive check function
-    const checkNeedsProcessing = (blocks: Readonly<Block[]>) => {
-      for (const block of blocks) {
-        if (needsProcessing) return;
-        if (block.type === 'image' && block.props?.url && typeof block.props.url === 'string' &&
-            (block.props.url.startsWith('artifact-images/') || block.props.url.startsWith('conversation-images/'))) {
-          needsProcessing = true;
-          return;
+      // First, save the existing data for the current artifact (if any)
+      try {
+        const existingData = localStorage.getItem(`artifact-data-${currentArtifactId}`);
+        if (existingData) {
+          // Save the data with a backup name in case we need to recover it
+          localStorage.setItem(`artifact-data-${currentArtifactId}-backup`, existingData);
+          if (process.env.NODE_ENV === 'development') console.log(`Backed up data for current artifact ${currentArtifactId} before switching`);
         }
-        if (block.children && block.children.length > 0) checkNeedsProcessing(block.children);
-        // Basic check for block array content
-        if (Array.isArray(block.content) && block.content.length > 0 && typeof block.content[0] === 'object' && 'type' in block.content[0]) {
-            // Use 'as any' here for the recursive *check* to satisfy linter
-            checkNeedsProcessing(block.content as any);
-        }
+      } catch (e) {
+        console.error('Error backing up current artifact data:', e);
       }
-    };
+      
+      // Update the current artifact ID to match the source
+      // This ensures we don't create a new artifact when saving AI-generated content
+      setCurrentArtifactId(sourceArtifactId);
+      
+      // Since we're changing currentArtifactId, also update persistence flag
+      // This helps syncToDatabaseCore make the right decision about create vs update
+      setIsArtifactPersisted(true);
+      
+      if (process.env.NODE_ENV === 'development') console.log(`[ARTIFACT ID UPDATED] Current artifact ID has been updated to: ${sourceArtifactId}`);
 
-    checkNeedsProcessing(editorContent);
+      // Now clear the sync pending for the old artifact ID
+      if (pendingSyncArtifactId !== sourceArtifactId) {
+        // We're switching artifacts, so any pending sync for the old one should be cancelled
+        setPendingSyncArtifactId(sourceArtifactId);
+        if (process.env.NODE_ENV === 'development') console.log(`Cleared pending sync for previous artifact ID, now tracking: ${sourceArtifactId}`);
+      }
+      
+      // Update the URL to match the new artifact ID
+      try {
+        const url = new URL(window.location.href);
+        const currentUrlArtifactId = url.searchParams.get('artifactId');
+        
+        if (currentUrlArtifactId !== sourceArtifactId) {
+          url.searchParams.set('artifactId', sourceArtifactId);
+          window.history.replaceState({}, '', url.toString());
+          if (process.env.NODE_ENV === 'development') console.log(`Updated URL to reflect new artifact ID: ${sourceArtifactId}`);
+        }
+      } catch (e) {
+        console.error('Error updating URL with new artifact ID:', e);
+      }
+    } else {
+      if (sourceArtifactId) {
+        // if (process.env.NODE_ENV === 'development') console.log(`Content change has matching artifactId: ${sourceArtifactId} (matches current)`);
+      } else {
+        // if (process.env.NODE_ENV === 'development') console.log(`Content change has no source artifactId (likely user edit)`);
+      }
+    }
+    
+    setEditorContent(content); // Update editor content state
+    if (isMounted.current) {
+      setIsDirty(true); // Mark editor as dirty
+      setLastSyncError(null); // Clear error when user types
+      // Trigger the debounce on content change, passing the new content and current title
+      debouncedLocalSave(content, title);
 
-    // If unprocessed paths exist and we aren't already processing
-    if (needsProcessing && !processingInProgress) {
-      if (process.env.NODE_ENV === 'development') console.log("useEffect: Detected unprocessed image paths. Starting resolution...");
-      processingInProgress = true; // Set flag
-
-      resolveImagePathsToUrls(editorContent) // Use the stable callback
-        .then(processedContent => {
-          // Check mount status again *inside* the promise resolution
-          if (isMounted.current) {
-            // Only update if the content actually changed after processing
-            if (JSON.stringify(processedContent) !== JSON.stringify(editorContent)) {
-               if (process.env.NODE_ENV === 'development') console.log("useEffect: Image paths resolved. Updating editor content.");
-               setEditorContent(processedContent);
-            } else {
-               if (process.env.NODE_ENV === 'development') console.log("useEffect: Processed content is identical to current. Skipping update.");
-            }
-          } else {
-             if (process.env.NODE_ENV === 'development') console.log("useEffect: Component unmounted before image processing completed.");
+      // Trigger Title Inference from Content Change
+      if (title === 'Untitled Artifact' && !userHasManuallySetTitle && content.length > 0) {
+        const artifactIdForInference = sourceArtifactId || currentArtifactId;
+        if (artifactIdForInference) {
+          if (process.env.NODE_ENV === 'development') {
+             console.log(`[InferTitle Check - ContentChange] Conditions met. Triggering inference for artifact ${artifactIdForInference}.`);
           }
-        })
-        .catch(error => {
-          console.error("useEffect: Error processing image URLs:", error);
-          // Optionally set an error state here
-        })
-        .finally(() => {
-           processingInProgress = false; // Reset flag
-        });
-    } else if (!needsProcessing) {
-       // console.log("useEffect: editorContent does not require image processing."); // Optional log
-    }
-
-  }, [editorContent, resolveImagePathsToUrls]); // Run when content or the (stable) function changes
-  // --- END NEW useEffect Hook ---
-
-  // Initialize: Load or setup new artifact
-  useEffect(() => {
-    if (artifactIdParam && user) {
-      if (process.env.NODE_ENV === 'development') console.log('Initial load based on URL artifactId');
-      // Call loadArtifact here if needed
-      loadArtifact(artifactIdParam, user);
-    } else if (!artifactIdParam && user && currentArtifactId) {
-      // Handle case where there's no artifactId in URL (new artifact)
-      if (process.env.NODE_ENV === 'development') console.log('Initial setup for new artifact with ID:', currentArtifactId);
-      if (isMounted.current) {
-        // Set initial state for a new artifact
-        setTitle('Untitled Artifact');
-        setEditorContent([]);
-        setIsDirty(false);
-        setIsSyncPending(false); // New artifact doesn't need sync initially
-        setIsSyncing(false);
-        setLastSyncError(null);
-        setIsArtifactPersisted(false);
+          // Call inferTitle directly (now defined above)
+          inferTitle(artifactIdForInference, content);
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[InferTitle Check - ContentChange] Cannot infer title, missing artifact ID.');
+          }
+        }
       }
     }
-    // Removed loadArtifact from dependencies to prevent loop on new artifact setup
-  }, [artifactIdParam, user, currentArtifactId]); // <-- loadArtifact REMOVED
+  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]); // REMOVED AI context dependencies
 
   // Memoize editor props (Ensure handleContentChange/handleTitleChange are stable via useCallback)
   const editorProps = useMemo(() => {
@@ -1207,6 +1022,58 @@ function EditorPageContent() {
     setTimeout(() => setIsBottomPanelAnimating(false), 300); // Adjust timing as needed
 
   }, [isBottomPanelCollapsed, bottomPanelSize]);
+
+  // Listen for artifact selection events from FileExplorer
+  useEffect(() => {
+    const handleArtifactSelected = (event: CustomEvent) => {
+      const { artifactId: selectedId } = event.detail;
+      // --- DIAGNOSTIC LOG --- 
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[Nav Check - artifactSelected Event] Received event`, {
+          selectedId,
+          currentArtifactId,
+          userExists: !!user,
+          shouldProceed: selectedId && user && selectedId !== currentArtifactId
+        });
+      }
+      // --- END LOG --- 
+
+      if (selectedId && user && selectedId !== currentArtifactId) {
+        // --- DIAGNOSTIC LOG --- 
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Nav Check - artifactSelected Event] Condition PASSED. Proceeding to load ${selectedId}`);
+        }
+        // --- END LOG --- 
+
+        // Flush any pending local save for the OLD artifact FIRST
+        try {
+          if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] Flushing potential pending save for ${currentArtifactId}...`);
+          debouncedLocalSave.flush(); // <-- Changed from cancel()
+          if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] Flush complete.`);
+        } catch (flushError) {
+          console.error("[Nav Check - artifactSelected Event] Error during debouncedLocalSave.flush():", flushError);
+        }
+
+        // Now check if sync is pending (could have become true after flush)
+        if (isSyncPending && isMounted.current) { // Check isSyncPending *after* flush
+           console.warn("[Nav Check - artifactSelected Event] Switching artifact with pending server changes. Attempting final sync...");
+           try {
+              latestSyncFn.current(); // Use the ID stored in pendingSyncArtifactId
+              if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] latestSyncFn attempt complete.`);
+           } catch (syncError) {
+             console.error("[Nav Check - artifactSelected Event] Error during latestSyncFn():", syncError);
+           }
+        }
+
+        if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] Calling loadArtifact(${selectedId})...`);
+        loadArtifact(selectedId, user);
+      }
+    };
+    window.addEventListener('artifactSelected', handleArtifactSelected as EventListener);
+    return () => {
+      window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
+    };
+  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]); // REMOVED AI context dependencies
 
   // Show a loading state only if Supabase user data is still loading
   if (isSupabaseLoading) {

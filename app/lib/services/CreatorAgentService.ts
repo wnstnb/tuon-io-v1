@@ -748,7 +748,7 @@ export class CreatorAgentService {
       const systemPrompt = `You are an AI assistant specialized in editing document sections.
 The user has selected a portion of a larger document (represented by block IDs: ${selectedBlockIds.join(', ')}) and provided an instruction for modification.
 You will be given the full document context in Markdown format and the user's instruction.
-Your task is to rewrite ONLY the selected portion based on the instruction, using the full document for context if necessary (e.g., for style, consistency, or information).
+Your task is to execute given instructions on the using the selected portion, in context of the full document if necessary (e.g., for style, consistency, or information).
 Output ONLY the modified Markdown content that should replace the original selection. Do NOT include conversational text, introductions, explanations, or markdown fences (like \`\`\`) around your output. Just provide the raw, modified Markdown for the selected section.`;
 
       const userPrompt = `Instruction: "${instruction}"

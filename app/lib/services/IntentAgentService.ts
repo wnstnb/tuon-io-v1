@@ -13,7 +13,7 @@ export interface IntentAnalysisResult {
   metadata?: {
     targetFile?: string;
     position?: number;
-    editorAction?: 'CREATE' | 'MODIFY' | 'EXPAND' | 'REPLACE' | 'REFORMAT' | 'DELETE' | 'NONE';
+    editorAction?: 'ADD' | 'MODIFY' | 'EXPAND' | 'REPLACE' | 'REFORMAT' | 'DELETE' | 'NONE';
   };
 }
 
@@ -164,8 +164,8 @@ Analyze the user's intent based on their input and the editor context. Determine
 !CRITICAL: If the user is asking about an image or screenshot they have uploaded AND HAVE NOT EXPLICITLY ASKED FOR WEB SEARCH, do not perform any web search. This means "needsWebSearch": false.
 
 1.  **Perform an action *directly* on the editor's content:**
-    * Creating new content (text, lists, code, sections, documents, etc.).
-    * Adding to or inserting into existing content.
+    * Generate new content (text, lists, code, sections, documents, etc.).
+    * Add generated content to the editor or inserting into existing content.
     * Modifying, replacing, or rewriting existing content.
     * Deleting content.
     * Reformatting content (e.g., changing style, applying markdown, fixing indentation).
@@ -196,7 +196,7 @@ If you determine the destination is EDITOR, also classify the specific operation
 * REPLACE: Completely replace existing content with new content.
 * REFORMAT: Change the formatting or organization without substantial content changes.
 * DELETE: Remove specific content.
-* CREATE: Generate **ENTIRELY NEW CONTENT** with **NO REFERENCES TO EXISTING CONTENT**.
+* ADD: Generate new content and add it to the editor without replacing existing content.
 
 ### Ambiguity Handling:
 * If the user asks *how* to do something (e.g., "How do I make a list?"), lean towards **CONVERSATION**.
@@ -213,7 +213,7 @@ You MUST respond with a VALID JSON object in the EXACT format shown below:
   "needsWebSearch": false,
   "searchQuery": "",
   "metadata": {
-    "editorAction": "CREATE"
+    "editorAction": "ADD"
   }
 }
 
