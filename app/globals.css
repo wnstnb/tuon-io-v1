@@ -43,6 +43,10 @@
   --success-color: #22c55e; /* Keep existing */
   --info-color: #FAD89D; /* Golden Sand */
   --primary-color-dark: #B38A58; /* Wheat Bronze */
+  /* NEW Info Notification Colors */
+  --info-bg: #FEF6E7; /* Light Yellow/Orange */
+  --info-text: #C77A0A; /* Dark Orange/Brown */
+  --info-border: #FAD89D; /* Golden Sand */
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -94,6 +98,10 @@
   --success-color: #4ade80; /* Keep existing */
   --info-color: #F1C37D; /* Luminous Amber */
   --primary-color-dark: #8C6638; /* Burnished Bronze */
+  /* NEW Info Notification Colors */
+  --info-bg: #4D381A; /* Dark Amber/Brown */
+  --info-text: #F1C37D; /* Luminous Amber */
+  --info-border: #F1C37D; /* Luminous Amber */
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -243,11 +251,12 @@ h1 {
   max-width: 100%;
   /* max-height: 48px; */
   margin: 0;
-  padding: 0.25rem 2rem;
+  /* Reduce vertical padding further */
+  padding: 0.25rem 3.1em; 
   border-bottom: 1px solid var(--border-color);
   transition: border-color 0.3s ease;
   display: flex;
-  align-items: center;
+  align-items: baseline;
 }
 
 .save-status-container {
@@ -291,9 +300,12 @@ h1 {
   font-family: 'JetBrains Mono', monospace;
   color: var(--text-color);
   cursor: pointer;
-  padding: 0.25rem 0;
+  padding: 0; 
   transition: color 0.3s ease;
-  line-height: 0;
+  /* line-height: 1.2; */ /* REMOVED explicit line-height */
+  /* NEW: Add flex alignment */
+  display: inline-flex; /* Use inline-flex to keep it from taking full width */
+  align-items: center; 
 }
 
 .title-display:hover {
@@ -302,7 +314,7 @@ h1 {
 
 .title-input {
   font-size: 1rem;
-  font-weight: 0;
+  font-weight: 600; /* Match display weight */
   font-family: 'JetBrains Mono', monospace;
   color: var(--text-color);
   background: transparent;
@@ -310,7 +322,11 @@ h1 {
   border-bottom: 2px solid var(--primary-color);
   outline: none;
   width: 100%;
-  padding: 0.25rem 0;
+  padding: 0;
+  /* line-height: 1.2; */ /* REMOVED explicit line-height */
+  /* NEW: Add flex alignment */
+  display: inline-flex; /* Use inline-flex */
+  align-items: center;
 }
 
 .theme-toggle {
@@ -418,7 +434,15 @@ h1 {
 /* PanelGroup styles */
 [data-panel-id] {
   overflow: auto;
-  transition: flex-basis 0.3s ease;
+  /* Ensure no general transition here */
+}
+
+/* Add transition directly to the right panel */
+[data-panel-id="right-panel"] {
+  /* transition: flex-basis 0.3s ease-in-out; */ /* REMOVE or COMMENT OUT this line */
+  /* Ensure overflow is still handled if needed, 
+     but it might already be handled by the default [data-panel-id] rule */
+  /* overflow: auto; */ 
 }
 
 [data-panel-group-id] {
@@ -2699,9 +2723,9 @@ html.dark .ai-status-indicator {
 }
 
 .chat-input-notification.info {
-  background-color: var(--info-bg, #e0f2fe);
-  color: var(--info-text, #075985);
-  border: 1px solid var(--info-border, #7dd3fc);
+  background-color: var(--info-bg);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
 }
 
 .chat-input-notification.success {
@@ -3086,4 +3110,9 @@ a:hover {
 /* Ensure no extra space after the last element */
 .markdown-content > *:last-child {
   margin-bottom: 0;
+}
+
+/* Add transition only when the panel is animating */
+[data-panel-id="right-panel"].panel-animating {
+  transition: flex-basis 0.3s ease-in-out;
 }

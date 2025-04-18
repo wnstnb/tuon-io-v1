@@ -69,9 +69,9 @@ function EditorPageContent() {
 
   const [title, setTitle] = useState<string>('Untitled Artifact');
   const [editorContent, setEditorContent] = useState<Block[]>([]);
-  const [showRightPanel, setShowRightPanel] = useState(false);
-  const [rightPanelSize, setRightPanelSize] = useState(20);
-  const [isRightPanelAnimating, setIsRightPanelAnimating] = useState(false);
+  const [showRightPanel, setShowRightPanel] = useState<boolean>(true);
+  const [rightPanelSize, setRightPanelSize] = useState<number>(25);
+  const [isRightPanelAnimating, setIsRightPanelAnimating] = useState<boolean>(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [bottomPanelSize, setBottomPanelSize] = useState(20);
   const [isBottomPanelCollapsed, setIsBottomPanelCollapsed] = useState(false);
@@ -139,15 +139,23 @@ function EditorPageContent() {
     const panelGroup = panelGroupRef.current;
     if (!panelGroup) return;
 
+    setIsRightPanelAnimating(true); // Set animating flag BEFORE layout change
+
     if (showRightPanel) {
       // Collapse
       panelGroup.setLayout([100, 0]);
     } else {
-      // Expand - use the stored rightPanelSize
-      panelGroup.setLayout([100 - rightPanelSize, rightPanelSize]);
+      // Expand - use the stored rightPanelSize or a default
+      const targetSize = rightPanelSize > 0 ? rightPanelSize : 25; // Ensure we expand to a non-zero size
+      panelGroup.setLayout([100 - targetSize, targetSize]);
     }
-    // Update state AFTER calling setLayout
-    // setShowRightPanel(prev => !prev);
+
+    // Reset animation flag after the transition duration (MUST match CSS)
+    setTimeout(() => {
+      setIsRightPanelAnimating(false);
+      // Note: showRightPanel state is managed by onCollapse/onExpand handlers
+    }, 300); // Match CSS transition duration (e.g., 0.3s)
+
   }, [showRightPanel, rightPanelSize]);
 
   const handlePanelResize = useCallback((sizes: number[]) => {
@@ -1258,6 +1266,7 @@ function EditorPageContent() {
           </PanelResizeHandle>
           <Panel 
             id="right-panel" 
+            className={isRightPanelAnimating ? 'panel-animating' : ''}
             defaultSize={rightPanelSize}
             minSize={0}
             maxSize={40}
