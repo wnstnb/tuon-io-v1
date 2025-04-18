@@ -660,6 +660,18 @@ export function AIProvider({ children }: AIProviderProps) {
         const currentUrlArtifactId = new URLSearchParams(window.location.search).get('artifactId');
         if (finalArtifactId !== currentUrlArtifactId) {
             console.log(`Navigating to artifact: ${finalArtifactId}. Reason: ${forceNavigation ? 'Forced by caller' : 'Artifact just created'}`);
+            
+            // Update the URL with the new artifact ID
+            const url = new URL(window.location.href);
+            url.searchParams.set('artifactId', finalArtifactId);
+            window.history.replaceState({}, '', url.toString());
+            
+            // Dispatch a custom event to notify the editor page of the navigation
+            window.dispatchEvent(new CustomEvent('artifactSelected', {
+              detail: { artifactId: finalArtifactId }
+            }));
+            
+            // Still use router.push for proper Next.js state management
             router.push(`/editor?artifactId=${finalArtifactId}`);
         } else {
              console.log(`Already on the correct artifact URL (${finalArtifactId}), skipping navigation.`);

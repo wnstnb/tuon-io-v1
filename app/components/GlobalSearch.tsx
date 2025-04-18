@@ -239,7 +239,7 @@ export default function GlobalSearch() {
       <input 
         type="text" 
         className="global-search-input" 
-        placeholder="Search artifacts & conversations..."
+        placeholder="Global Search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={handleFocus}
