@@ -1,13 +1,21 @@
 'use client';
 
-import React, { useState, FormEvent, useRef, useEffect } from 'react';
-import { Send, Image, Search, Sparkles } from 'lucide-react';
+import React, { useState, FormEvent, useRef, useEffect, useCallback } from 'react';
+import { Send, Image, Search, Sparkles, X as CloseIcon } from 'lucide-react';
 import { useAI, EditorContext } from '../context/AIContext';
 import ModelSelector from './ModelSelector';
 import { Block } from '@blocknote/core';
 
 // Define search type (can be shared)
 type SearchType = 'web' | 'exaAnswer';
+
+// NEW: Notification Type Definition
+type NotificationType = 'info' | 'error' | 'success';
+interface NotificationState {
+  message: string;
+  type: NotificationType;
+  id: number; // Unique ID for timeout management
+}
 
 // Optional prop to receive editor context from parent components
 interface ChatInputProps {
@@ -23,6 +31,61 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchType, setSearchType] = useState<SearchType>('web');
+  const [notification, setNotification] = useState<NotificationState | null>(null); // NEW: Notification state
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null); // NEW: Ref for timeout
+
+  // --- NEW: Function to show notification ---
+  const showNotification = useCallback((message: string, type: NotificationType, duration = 3000) => {
+    // Clear existing timeout if any
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+
+    const newNotificationId = Date.now(); // Simple unique ID
+    setNotification({ message, type, id: newNotificationId });
+
+    // Set new timeout to clear the notification
+    notificationTimeoutRef.current = setTimeout(() => {
+      // Only clear if the notification hasn't been replaced by a newer one
+      setNotification(current => (current?.id === newNotificationId ? null : current));
+      notificationTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
+  // --- NEW: Function to hide notification ---
+  const hideNotification = useCallback(() => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+      notificationTimeoutRef.current = null;
+    }
+    setNotification(null);
+  }, []);
+
+  // --- NEW: Effect to listen for global notification events ---
+  useEffect(() => {
+    const handleShowNotification = (event: CustomEvent) => {
+      const { message, type = 'info', duration = 3000 } = event.detail;
+      if (message) {
+        showNotification(message, type, duration);
+      }
+    };
+
+    const handleHideNotification = () => {
+      hideNotification();
+    };
+
+    window.addEventListener('chat:showNotification', handleShowNotification as EventListener);
+    window.addEventListener('chat:hideNotification', handleHideNotification);
+
+    // Cleanup listener and timeout on unmount
+    return () => {
+      window.removeEventListener('chat:showNotification', handleShowNotification as EventListener);
+      window.removeEventListener('chat:hideNotification', handleHideNotification);
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
+  }, [showNotification, hideNotification]); // Dependencies include the memoized functions
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -224,7 +287,26 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
   };
 
   return (
-    <div className="chat-input-container">
+    // Make the container relative to position the notification absolutely within it
+    <div className="chat-input-container relative">
+      {/* --- NEW: Notification Display --- */}
+      {notification && (
+        <div
+          className={`chat-input-notification ${notification.type}`}
+          role="alert"
+        >
+          <span className="notification-message">{notification.message}</span>
+          <button
+            onClick={hideNotification}
+            className="notification-close-btn"
+            aria-label="Dismiss notification"
+          >
+            <CloseIcon size={16} />
+          </button>
+        </div>
+      )}
+      {/* --- End Notification Display --- */}
+
       <form onSubmit={handleSubmit} className="chat-input-form">
         {/* Selected image preview */}
         {imagePreview && (

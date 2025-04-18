@@ -9,6 +9,7 @@ const modelOptions: { value: AIModelType; label: string }[] = [
   { value: 'gpt-o3-mini', label: 'GPT-3.5 Mini' },
   { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
   { value: 'gemini-2.5-pro-preview-03-25', label: 'Gemini 2.5 Pro' },
+  { value: 'gemini-2.5-flash-preview-04-17', label: 'Gemini 2.5 Flash' },
 ];
 
 export default function ModelSelector() {

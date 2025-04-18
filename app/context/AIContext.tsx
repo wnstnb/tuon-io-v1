@@ -12,7 +12,6 @@ import { useSupabase } from '../context/SupabaseContext';
 import { useRouter } from 'next/navigation';
 import { ArtifactService } from '../lib/services/ArtifactService';
 import { supabase } from '../lib/supabase';
-import { toast } from 'react-toastify';
 
 // Define supported AI models
 export type AIModelType = 
@@ -20,7 +19,8 @@ export type AIModelType =
   | 'gpt-4.1-2025-04-14'
   | 'gpt-o3-mini' 
   | 'gemini-2.0-flash'
-  | 'gemini-2.5-pro-preview-03-25';
+  | 'gemini-2.5-pro-preview-03-25'
+  | 'gemini-2.5-flash-preview-04-17';
 
 // Define message type
 export interface Message {
@@ -167,6 +167,16 @@ export function AIProvider({ children }: AIProviderProps) {
    const getCurrentEditorContext = useCallback((): EditorContext | undefined => {
      return editorContextRef;
    }, [editorContextRef]);
+
+  // --- NEW: Helper function to dispatch notifications ---
+  const dispatchNotification = useCallback((message: string, type: 'info' | 'error' | 'success', duration?: number) => {
+    const detail: { message: string; type: string; duration?: number } = { message, type };
+    if (duration) {
+      detail.duration = duration;
+    }
+    window.dispatchEvent(new CustomEvent('chat:showNotification', { detail }));
+  }, []);
+  // --- END Helper --- //
 
   // Helper function to get AI response based on model type
   const getAIResponse = async (conversation: Conversation, content: string, imageDataUrl?: string | null): Promise<string> => {
@@ -478,13 +488,13 @@ export function AIProvider({ children }: AIProviderProps) {
 
     if (!currentConversation) {
       console.error('processEditorSelectionAction: No current conversation found.');
-      toast.error("Cannot process action: No active conversation.");
+      dispatchNotification("Cannot process action: No active conversation.", 'error');
       return;
     }
     // --- NEW: Check for artifactId --- 
     if (!currentConversation.artifactId) {
         console.error('processEditorSelectionAction: Current conversation has no linked artifactId.');
-        toast.error("Cannot process action: Conversation not linked to an artifact.");
+        dispatchNotification("Cannot process action: Conversation not linked to an artifact.", 'error');
         return;
     }
     // --- END Check --- 
@@ -545,16 +555,15 @@ export function AIProvider({ children }: AIProviderProps) {
          detail: modificationResult 
        });
        window.dispatchEvent(applyEvent);
-       toast.success("AI modification applied!"); // Give feedback
+       dispatchNotification("AI modification applied!", 'success');
 
     } catch (error) {
       console.error('Error processing editor selection action:', error);
-      // --- NEW: Show more specific error --- 
-      toast.error(`Failed to apply AI modification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      dispatchNotification(`Failed to apply AI modification: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setIsLoading(false); // Turn off loading state
     }
-  }, [currentConversation, currentModel]); // Added dependencies
+  }, [currentConversation, currentModel, dispatchNotification]); // Added dispatchNotification dependency
   // --- END NEW Implementation ---
 
   // Create a new conversation
@@ -691,9 +700,9 @@ export function AIProvider({ children }: AIProviderProps) {
     imageDataUrl?: string | null,
     editorContext?: EditorContext,
     searchType?: SearchType,
-    isChatPanelCollapsed?: boolean
+    isPanelCollapsed?: boolean
   ) => {
-    console.log(`[AIContext] sendMessage called. Search Type: ${searchType || 'Default (Web)'}, Panel Collapsed: ${isChatPanelCollapsed}`);
+    console.log(`[AIContext] sendMessage called. Search Type: ${searchType || 'Default (Web)'}, Panel Collapsed: ${isPanelCollapsed}`);
     // Add detailed logging about the current conversation and its artifact ID
     console.log(`[AIContext] sendMessage called with current conversation ID: ${currentConversation?.id}`);
     console.log(`[AIContext] Current conversation artifact ID: ${currentConversation?.artifactId}`);
@@ -805,33 +814,31 @@ export function AIProvider({ children }: AIProviderProps) {
         };
       }
       
-      // --- Wrap Creator Agent Service Call with toast.promise ---
+      // --- REMOVED toast.promise wrapper ---
       let agentResponse;
+      // Display pending message using new notification system
+      dispatchNotification("Assistant is thinking...", 'info', 60000); // Show for up to 60s
       try {
-        agentResponse = await toast.promise(
-          CreatorAgentService.processRequest(
-            content, 
-            intentAnalysis, 
-            conversationContext,
-            userMessage.imageUrl,
-            editorContext?.markdown,
-            currentModel,
-            searchType
-          ),
-          {
-            pending: 'Assistant is thinking...',
-            success: 'Response received!', // Or a more dynamic message if needed
-            error: 'Error processing request. Please try again.'
-          }
+        agentResponse = await CreatorAgentService.processRequest(
+          content, 
+          intentAnalysis, 
+          conversationContext,
+          userMessage.imageUrl,
+          editorContext?.markdown,
+          currentModel,
+          searchType
         );
+        // Hide pending message and show success
+        window.dispatchEvent(new CustomEvent('chat:hideNotification')); // Hide thinking message
+        dispatchNotification("Response received!", 'success');
       } catch (agentError) {
-        // Error is already handled by toast.promise, but we catch here 
-        // to prevent further execution and set a default response.
-        console.error('Error calling CreatorAgentService (caught after toast.promise):', agentError);
+        console.error('Error calling CreatorAgentService:', agentError);
+        window.dispatchEvent(new CustomEvent('chat:hideNotification')); // Hide thinking message
+        dispatchNotification("Error processing request. Please try again.", 'error');
         // Set a default error response to prevent breaking subsequent code
         agentResponse = { chatContent: "Sorry, I encountered an error processing your request." }; 
       }
-      // --- End toast.promise wrapper ---
+      // --- End Agent Service Call ---
       
       // Use the response from the agent (or the fallback error message)
       const aiChatResponse = agentResponse.chatContent;
@@ -896,15 +903,15 @@ export function AIProvider({ children }: AIProviderProps) {
           window.dispatchEvent(setContentEvent);
         } catch (error) {
           console.error("AIContext: Error dispatching editor:setContent event:", error);
-          // Optionally, notify the user via toast
-          toast.error("Failed to update editor content."); 
+          dispatchNotification("Failed to update editor content.", 'error');
         }
       }
       // --------------------------------
 
     } catch (error) {
-      // Catch any broader errors in the sendMessage flow
       console.error('Error in sendMessage:', error);
+      // Potentially dispatch a generic error notification here if needed
+      dispatchNotification("An unexpected error occurred.", 'error');
     } finally {
       setIsLoading(false); // Turn off loading state
     }

@@ -28,7 +28,6 @@ import { Loader2 } from 'lucide-react';
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/react/style.css";
 import { ArtifactNotFoundError } from '../lib/services/ArtifactService';
-import { toast } from 'react-toastify';
 import Image from 'next/image';
 
 // Initialize the Newsreader font
@@ -611,6 +610,7 @@ function EditorPageContent() {
           // --- MODIFIED: Update state directly instead of calling handleTitleChange ---
           const inferredTitle = data.title;
           setTitle(inferredTitle);
+          setUserHasManuallySetTitle(true); // <-- Set the flag here
           setIsDirty(true); // Mark as dirty
           setLastSyncError(null); // Clear errors
           // Trigger save with the *new* inferred title and the *current* content
@@ -632,7 +632,7 @@ function EditorPageContent() {
       }
     }
     // Remove handleTitleChange from dependencies, add editorContent and debouncedLocalSave
-  }, [user, title, userHasManuallySetTitle, editorContent, debouncedLocalSave]); 
+  }, [user, title, userHasManuallySetTitle, setUserHasManuallySetTitle, editorContent, debouncedLocalSave]); // <-- Added setUserHasManuallySetTitle dependency
 
   // --- Load Artifact Function ---
   const loadArtifact: (idToLoad: string, user: User) => Promise<void> = useCallback(async (idToLoad, user) => {
@@ -874,9 +874,10 @@ function EditorPageContent() {
       // Trigger the debounce on content change, passing the new content and current title
       debouncedLocalSave(content, title);
 
-      // Trigger Title Inference from Content Change
-      if (title === 'Untitled Artifact' && !userHasManuallySetTitle && content.length > 0) {
-        const artifactIdForInference = sourceArtifactId || currentArtifactId;
+      // Only trigger title inference if this is a user edit (no sourceArtifactId)
+      // and we haven't already inferred or set a title
+      if (!sourceArtifactId && title === 'Untitled Artifact' && !userHasManuallySetTitle && content.length > 0) {
+        const artifactIdForInference = currentArtifactId;
         if (artifactIdForInference) {
           if (process.env.NODE_ENV === 'development') {
              console.log(`[InferTitle Check - ContentChange] Conditions met. Triggering inference for artifact ${artifactIdForInference}.`);
@@ -890,7 +891,7 @@ function EditorPageContent() {
         }
       }
     }
-  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]); // REMOVED AI context dependencies
+  }, [user, currentArtifactId, title, userHasManuallySetTitle, debouncedLocalSave, inferTitle]); // Added title and userHasManuallySetTitle as dependencies
 
   // Memoize editor props (Ensure handleContentChange/handleTitleChange are stable via useCallback)
   const editorProps = useMemo(() => {
@@ -937,51 +938,60 @@ function EditorPageContent() {
   };
   // --- END Drawer Handler ---
 
-  // --- Effect for AI Message Toast Notification ---
+  // --- NEW: Helper function to dispatch notifications (can be reused if needed) ---
+  const dispatchNotification = useCallback((message: string, type: 'info' | 'error' | 'success', duration?: number) => {
+    const detail: { message: string; type: string; duration?: number } = { message, type };
+    if (duration) {
+      detail.duration = duration;
+    }
+    window.dispatchEvent(new CustomEvent('chat:showNotification', { detail }));
+  }, []);
+  // --- END Helper --- //
+
+  // --- START: Toast Notification Effect (Modified for Inline Notification) ---
   useEffect(() => {
     const messages = currentConversation?.messages;
-    const currentMessageCount = messages?.length ?? 0;
-    const lastMessage = messages?.[currentMessageCount - 1];
+    if (!messages) return;
 
-    // --- Debug Logs Start ---
+    const currentMessageCount = messages.length;
+    const lastMessage = messages[currentMessageCount - 1];
+
+    // Debugging logs
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Toast Effect Check]', {
-        isRightPanelCollapsed: !showRightPanel, // Changed check to !showRightPanel
+      console.log('[Inline Notification Effect Check]', {
+        showRightPanel,
         currentMessageCount,
         prevCount: prevMessagesCountRef.current,
         lastMessageRole: lastMessage?.role,
       });
     }
-    // --- Debug Logs End ---
 
     // Check if the RIGHT panel is collapsed, messages exist, count increased, and last message is from AI
     if (
-      !showRightPanel && // *** Changed condition to !showRightPanel ***
-      messages &&
+      !showRightPanel &&
       currentMessageCount > prevMessagesCountRef.current &&
       lastMessage?.role === 'assistant'
     ) {
-      // --- Debug Log Start ---
       if (process.env.NODE_ENV === 'development') {
-        console.log('[Toast Effect] Conditions met (Right Panel Collapsed). Showing toast.'); // Updated log message
+        console.log('[Inline Notification Effect] Conditions met (Right Panel Collapsed). Showing notification.');
       }
-      // --- Debug Log End ---
 
       const lastMessageContent = lastMessage.content;
-      // Truncate long messages for the toast
-      const toastContent = lastMessageContent.length > 150
-        ? lastMessageContent.substring(0, 147) + '...'
+      // Truncate long messages for the notification
+      const notificationContent = lastMessageContent.length > 100
+        ? lastMessageContent.substring(0, 97) + '...'
         : lastMessageContent;
 
-      // Display the toast
-      toast(toastContent);
+      // Display the inline notification via the custom event
+      // toast(toastContent); // REPLACED
+      dispatchNotification(notificationContent, 'info');
     }
 
     // Update the ref with the current count for the next render
     prevMessagesCountRef.current = currentMessageCount;
 
-  }, [currentConversation?.messages, showRightPanel]); // *** Depend on showRightPanel instead of isBottomPanelCollapsed ***
-  // --- End Toast Notification Effect ---
+  }, [currentConversation?.messages, showRightPanel, dispatchNotification]); // Added dispatchNotification dependency
+  // --- End Inline Notification Effect ---
 
   // Function to handle layout changes in the vertical panel group
   const handleVerticalLayout = useCallback((sizes: number[]) => {
