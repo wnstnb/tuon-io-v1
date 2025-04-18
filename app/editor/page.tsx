@@ -640,7 +640,7 @@ function EditorPageContent() {
       }
     }
     // Remove handleTitleChange from dependencies, add editorContent and debouncedLocalSave
-  }, [user, title, userHasManuallySetTitle, setUserHasManuallySetTitle, editorContent, debouncedLocalSave]); // <-- Added setUserHasManuallySetTitle dependency
+  }, [user, title, userHasManuallySetTitle, setUserHasManuallySetTitle, editorContent, debouncedLocalSave, setIsEditorProcessing]); // <-- Added setIsEditorProcessing dependency
 
   // --- Load Artifact Function ---
   const loadArtifact: (idToLoad: string, user: User) => Promise<void> = useCallback(async (idToLoad, user) => {
@@ -883,8 +883,13 @@ function EditorPageContent() {
       debouncedLocalSave(content, title);
 
       // Only trigger title inference if this is a user edit (no sourceArtifactId)
-      // and we haven't already inferred or set a title
-      if (!sourceArtifactId && title === 'Untitled Artifact' && !userHasManuallySetTitle && content.length > 0) {
+      // and we haven't already inferred or set a title, AND we are not currently processing
+      if (!sourceArtifactId &&
+          title === 'Untitled Artifact' &&
+          !userHasManuallySetTitle &&
+          content.length > 0 &&
+          !isEditorProcessing
+          ) {
         const artifactIdForInference = currentArtifactId;
         if (artifactIdForInference) {
           if (process.env.NODE_ENV === 'development') {
@@ -899,7 +904,7 @@ function EditorPageContent() {
         }
       }
     }
-  }, [user, currentArtifactId, title, userHasManuallySetTitle, debouncedLocalSave, inferTitle]); // Added title and userHasManuallySetTitle as dependencies
+  }, [user, currentArtifactId, title, userHasManuallySetTitle, debouncedLocalSave, inferTitle, isEditorProcessing]); // Added title, userHasManuallySetTitle, and isEditorProcessing
 
   // Memoize editor props (Ensure handleContentChange/handleTitleChange are stable via useCallback)
   const editorProps = useMemo(() => {
