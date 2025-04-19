@@ -43,7 +43,7 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
   // const Components = useComponentsContext(); // REMOVED
   const [showInput, setShowInput] = useState(false);
   const [instruction, setInstruction] = useState('');
-  const { isLoading, processEditorSelectionAction } = useAI(); 
+  const { isLoading, processEditorSelectionAction, setFollowUpText } = useAI(); 
   const [isHoveringAI, setIsHoveringAI] = useState(false); // Renamed for clarity
   const [isHoveringFollowUp, setIsHoveringFollowUp] = useState(false); // State for new button
   const [isSendHovering, setIsSendHovering] = useState(false); // For send button hover
@@ -71,11 +71,9 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
         // Convert selected blocks to Markdown
         const markdownText = await editor.blocksToMarkdownLossy(selectedBlocks);
 
-        // Dispatch custom event with the markdown text
-        const followUpEvent = new CustomEvent('editor:followUpText', {
-          detail: { text: markdownText }
-        });
-        window.dispatchEvent(followUpEvent);
+        // --- NEW: Set follow-up text using context --- 
+        setFollowUpText(markdownText); 
+        // --- END NEW ---
 
         // Optional: Close AI input if open, clear selection ref
         setShowInput(false);
@@ -100,7 +98,7 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
         detail: { message: 'Please select text to follow up on.', type: 'info' }
       }));
     }
-  }, [editor]);
+  }, [editor, setFollowUpText]);
 
   const handleSendClick = useCallback(async () => {
     // Use stored selection from the ref

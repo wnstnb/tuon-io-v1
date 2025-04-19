@@ -963,9 +963,9 @@ h1 {
 /* Chat Messages */
 .chat-message {
   display: flex;
-  gap: 12px;
+  gap: 4px; /* Reduce gap since avatars are removed */
   font-size: 14px;
-  max-width: 100%;
+  max-width: 100%; /* Ensure row doesn't overflow */
 }
 
 .message-avatar {
@@ -997,6 +997,7 @@ h1 {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* Prevent bubble overflow issues */
 }
 
 /* Adjust the message bubbles to account for removed avatars */
@@ -1020,6 +1021,8 @@ h1 {
   margin-left: auto; /* Push user messages to the right */
   max-width: 85%; /* Limit width for better readability */
   border-radius: 12px 12px 0 12px; /* Rounded corners with point at bottom left */
+  width: fit-content; /* Prevent stretching beyond content */
+  align-self: flex-end; /* Explicitly align to the end (right) */
 }
 
 .assistant-message .message-bubble {
@@ -1027,6 +1030,9 @@ h1 {
   /* border: 1px solid var(--border-color); */
   max-width: 85%; /* Limit width for better readability */
   border-radius: 12px 12px 12px 0; /* Rounded corners with point at bottom right */
+  width: fit-content; /* Prevent stretching beyond content */
+  margin-right: auto; /* Ensure left alignment */
+  align-self: flex-start; /* Explicitly align to the start (left) */
 }
 
 .system-message .message-bubble {
@@ -3121,39 +3127,37 @@ a:hover {
 /* Styles for the Follow-up Text Bubble in ChatInput */
 
 .follow-up-text-container {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  z-index: 10;
   display: flex;
   align-items: center;
-  padding: 4px 8px; /* Reduced padding */
-  margin-bottom: 6px; /* Slightly less margin */
-  border-radius: 4px; /* Slightly smaller radius */
-  /* --- Mimic Toast Success Style (adjust vars/colors as needed) --- */
-  background-color: var(--card-bg); /* Light mode green background */
-  border: 1px solid var(--text-primary); /* Light mode border */
-  font-size: 12px; /* Smaller font size */
-  color: var(--text-secondary); /* Darker text for light bg */
-  /* --- End Toast Style --- */
+  padding: 4px 8px;
+  border-radius: 4px;
+  /* Use variables consistent with toast/info styles */
+  background-color: var(--info-bg); /* Light mode info background */
+  border: 1px solid var(--info-border); /* Light mode info border */
+  font-size: 12px;
+  color: var(--info-text); /* Light mode info text */
   max-width: 100%;
   box-sizing: border-box;
 }
 
-/* Dark mode adjustments */
-.dark .follow-up-text-container,
-@media (prefers-color-scheme: dark) {
-  .follow-up-text-container {
-     /* --- Mimic Toast Success Style (Dark) --- */
-    background-color: var(--toast-success-bg-dark, var(--success-bg-dark, #166534)); /* Dark mode green background */
-    border: 1px solid var(--toast-success-border-dark, var(--success-border-color-dark, #34d399)); /* Dark mode border */
-    color: var(--toast-success-text-dark, var(--success-text-color-dark, #f0fdf4)); /* Lighter text for dark bg */
-    /* --- End Toast Style (Dark) --- */
-  }
+/* Dark mode adjustments using data-theme attribute */
+[data-theme='dark'] .follow-up-text-container {
+  background-color: var(--info-bg); /* Dark mode info background */
+  border: 1px solid var(--info-border); /* Dark mode info border */
+  color: var(--info-text); /* Dark mode info text */
 }
 
 .follow-up-label {
-  font-weight: 500; /* Keep slightly bolder */
-  margin-right: 5px; /* Slightly less space */
+  font-weight: 500;
+  margin-right: 5px;
   white-space: nowrap;
-  /* Use the same color as the main text for simplicity */
-  color: inherit;
+  color: inherit; /* Inherit color from container */
 }
 
 .follow-up-content {
@@ -3161,57 +3165,51 @@ a:hover {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  /* Ensure content color is also inherited */
-  color: inherit;
+  color: inherit; /* Inherit color from container */
 }
 
-/* Apply to the span inside .follow-up-content if using the RenderMarkdown component */
 .follow-up-content span {
   display: inline-block;
   max-width: 100%;
-  vertical-align: middle; /* Helps align text nicely */
+  vertical-align: middle;
 }
 
 .clear-follow-up-btn {
-  /* --- Style like the screenshot button --- */
-  background-color: rgba(255,255,255,0); /* White background */
-  /* border: 1px solid var(--button-secondary-border, #d1d5db); Light gray border */
-  color: var(--button-secondary-text, #1f2937); /* Dark text/icon */
+  /* Match screenshot style */
+  background-color: var(--card-bg); /* Use card background */
+  border: 1px solid var(--border-color); /* Use default border */
+  color: var(--text-color); /* Use default text color */
   border-radius: 4px;
   cursor: pointer;
-  padding: 0; /* Remove padding */
+  padding: 0;
   margin-left: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px; /* Fixed width */
-  height: 20px; /* Fixed height */
-  flex-shrink: 0; /* Prevent shrinking */
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
   transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
 }
 
-/* Adjust icon size within the button */
 .clear-follow-up-btn > svg {
   width: 14px;
   height: 14px;
 }
 
-
 .clear-follow-up-btn:hover {
-  background-color: var(--button-secondary-bg-hover, #f9fafb);
-  border-color: var(--button-secondary-border-hover, #9ca3af);
+  background-color: var(--hover-bg);
+  border-color: var(--text-color-secondary);
 }
 
-/* Dark mode for the button */
-.dark .clear-follow-up-btn,
-@media (prefers-color-scheme: dark) {
-  .clear-follow-up-btn {
-    background-color: var(--button-secondary-bg-dark, #4b5563); /* Dark background */
-    border: 1px solid var(--button-secondary-border-dark, #6b7280); /* Darker border */
-    color: var(--button-secondary-text-dark, #f3f4f6); /* Light text/icon */
-  }
-   .clear-follow-up-btn:hover {
-    background-color: var(--button-secondary-bg-hover-dark, #556172);
-    border-color: var(--button-secondary-border-hover-dark, #7c8798);
-  }
+/* Dark mode for the button using data-theme attribute */
+[data-theme='dark'] .clear-follow-up-btn {
+  background-color: var(--card-bg); /* Use dark card background */
+  border: 1px solid var(--border-color); /* Use dark border */
+  color: var(--text-color); /* Use dark text color */
+}
+
+[data-theme='dark'] .clear-follow-up-btn:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--text-color-secondary);
 }

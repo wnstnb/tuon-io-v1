@@ -26,13 +26,12 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const { sendMessage, isLoading } = useAI();
+  const { sendMessage, isLoading, followUpText, setFollowUpText } = useAI();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchType, setSearchType] = useState<SearchType>('web');
   const [notification, setNotification] = useState<NotificationState | null>(null); // NEW: Notification state
   const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null); // NEW: Ref for timeout
-  const [followUpText, setFollowUpText] = useState<string | null>(null); // NEW: State for follow-up text
 
   // --- NEW: Function to show notification ---
   const showNotification = useCallback((message: string, type: NotificationType, duration = 3000) => {
@@ -86,26 +85,6 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
       }
     };
   }, [showNotification, hideNotification]); // Dependencies include the memoized functions
-
-  // --- NEW: Effect to listen for follow-up text event ---
-  useEffect(() => {
-    const handleFollowUp = (event: CustomEvent) => {
-      const text = event.detail?.text;
-      if (typeof text === 'string') {
-        console.log('ChatInput received followUpText:', text.substring(0, 50) + '...');
-        setFollowUpText(text);
-        // Optionally focus the textarea after adding follow-up
-        textareaRef.current?.focus();
-      }
-    };
-
-    window.addEventListener('editor:followUpText', handleFollowUp as EventListener);
-
-    return () => {
-      window.removeEventListener('editor:followUpText', handleFollowUp as EventListener);
-    };
-  }, []); // Empty dependency array ensures this runs once on mount
-  // --- END NEW ---
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -287,7 +266,7 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
     if (followUpText) {
       // Simple prefixing. You might want a more structured format.
       messageToSend = `Regarding the selected text:\n\`\`\`\n${followUpText}\n\`\`\`\n\n${userMessage}`;
-      setFollowUpText(null); // Clear follow-up text after preparing it
+      setFollowUpText(null); // Use context setter to clear follow-up text
     }
     // --- END NEW ---
     
@@ -315,9 +294,11 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
     setSearchType(currentType => currentType === 'web' ? 'exaAnswer' : 'web');
   };
 
+  // --- MODIFIED: Clear follow-up text using context setter ---
   const clearFollowUpText = useCallback(() => {
-    setFollowUpText(null);
-  }, []);
+    setFollowUpText(null); // Use context setter
+  }, [setFollowUpText]); // Add context setter to dependencies
+  // --- END NEW ---
 
   return (
     // Make the container relative to position the notification absolutely within it

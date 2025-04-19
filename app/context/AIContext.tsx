@@ -108,6 +108,8 @@ interface AIContextType {
     selectedBlockIds: string[],
     fullContextMarkdown: string
   ) => Promise<void>;
+  followUpText: string | null;
+  setFollowUpText: (text: string | null) => void;
 }
 
 // Create the AI context
@@ -157,6 +159,7 @@ export function AIProvider({ children }: AIProviderProps) {
   const [isInitialized, setIsInitialized] = useState(false);
   const { user: currentUser } = useSupabase();
   const [editorContextRef, setEditorContextRef] = useState<EditorContext | undefined>(undefined);
+  const [followUpText, setFollowUpText] = useState<string | null>(null);
 
   // --- Utility Function to Update Editor Context ---
   const updateEditorContext = useCallback((context?: EditorContext) => {
@@ -988,7 +991,9 @@ export function AIProvider({ children }: AIProviderProps) {
         updateEditorContext,
         getCurrentEditorContext,
         findConversationByArtifactId,
-        processEditorSelectionAction
+        processEditorSelectionAction,
+        followUpText,
+        setFollowUpText
       }}
     >
       {children}
