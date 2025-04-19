@@ -4,7 +4,6 @@ import React, { useState, FormEvent, useRef, useEffect, useCallback } from 'reac
 import { Send, Image, Search, Sparkles, X as CloseIcon } from 'lucide-react';
 import { useAI, EditorContext } from '../context/AIContext';
 import ModelSelector from './ModelSelector';
-import { Block } from '@blocknote/core';
 
 // Define search type (can be shared)
 type SearchType = 'web' | 'exaAnswer';
@@ -33,6 +32,7 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
   const [searchType, setSearchType] = useState<SearchType>('web');
   const [notification, setNotification] = useState<NotificationState | null>(null); // NEW: Notification state
   const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null); // NEW: Ref for timeout
+  const [followUpText, setFollowUpText] = useState<string | null>(null); // NEW: State for follow-up text
 
   // --- NEW: Function to show notification ---
   const showNotification = useCallback((message: string, type: NotificationType, duration = 3000) => {
@@ -86,6 +86,26 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
       }
     };
   }, [showNotification, hideNotification]); // Dependencies include the memoized functions
+
+  // --- NEW: Effect to listen for follow-up text event ---
+  useEffect(() => {
+    const handleFollowUp = (event: CustomEvent) => {
+      const text = event.detail?.text;
+      if (typeof text === 'string') {
+        console.log('ChatInput received followUpText:', text.substring(0, 50) + '...');
+        setFollowUpText(text);
+        // Optionally focus the textarea after adding follow-up
+        textareaRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('editor:followUpText', handleFollowUp as EventListener);
+
+    return () => {
+      window.removeEventListener('editor:followUpText', handleFollowUp as EventListener);
+    };
+  }, []); // Empty dependency array ensures this runs once on mount
+  // --- END NEW ---
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -234,7 +254,7 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
     e.preventDefault();
     console.log('ChatInput: handleSubmit called.');
     
-    if ((!message.trim() && !selectedImage) || isLoading) return;
+    if ((!message.trim() && !selectedImage && !followUpText) || isLoading) return;
     
     const userMessage = message;
     setMessage('');
@@ -262,9 +282,18 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
       clearSelectedImage();
     }
     
+    // --- NEW: Prepare follow-up text for sending --- 
+    let messageToSend = userMessage;
+    if (followUpText) {
+      // Simple prefixing. You might want a more structured format.
+      messageToSend = `Regarding the selected text:\n\`\`\`\n${followUpText}\n\`\`\`\n\n${userMessage}`;
+      setFollowUpText(null); // Clear follow-up text after preparing it
+    }
+    // --- END NEW ---
+    
     // Call sendMessage, always passing the current searchType and panel state
     await sendMessage(
-      userMessage, 
+      messageToSend, // Use the potentially modified message
       imageDataUrl, 
       enhancedEditorContext, 
       searchType,
@@ -285,6 +314,10 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
   const toggleSearchType = () => {
     setSearchType(currentType => currentType === 'web' ? 'exaAnswer' : 'web');
   };
+
+  const clearFollowUpText = useCallback(() => {
+    setFollowUpText(null);
+  }, []);
 
   return (
     // Make the container relative to position the notification absolutely within it
@@ -308,6 +341,25 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
       {/* --- End Notification Display --- */}
 
       <form onSubmit={handleSubmit} className="chat-input-form">
+        {/* --- NEW: Display Follow-up Text --- */} 
+        {followUpText && (
+          <div className="follow-up-text-container">
+            <span className="follow-up-label">💭</span>
+            <div className="follow-up-content">
+              <RenderMarkdown markdown={followUpText} maxLength={150} />
+            </div>
+            <button
+              type="button"
+              className="clear-follow-up-btn"
+              onClick={clearFollowUpText}
+              aria-label="Clear follow-up text"
+            >
+              <CloseIcon size={16} />
+            </button>
+          </div>
+        )}
+        {/* --- END NEW --- */} 
+
         {/* Selected image preview */}
         {imagePreview && (
           <div className="image-preview-container">
@@ -330,7 +382,7 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="What do you want to focus on?"
+              placeholder={followUpText ? "Add details or ask about the text..." : "What do you want to focus on?"}
               disabled={isLoading}
               rows={1}
               className="chat-textarea"
@@ -370,8 +422,8 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
                 style={{ display: 'none' }}
               />
               <button 
-                type="submit" 
-                disabled={(!message.trim() && !selectedImage) || isLoading}
+                type="submit"
+                disabled={(!message.trim() && !selectedImage && !followUpText) || isLoading}
                 className="send-button"
                 aria-label="Send message"
               >
@@ -383,4 +435,21 @@ export default function ChatInput({ editorContext: initialEditorContext, isPanel
       </form>
     </div>
   );
-} 
+}
+
+// --- NEW: Simple component to render Markdown as HTML (basic implementation) ---
+// You might want a more robust Markdown renderer like 'react-markdown'
+const RenderMarkdown: React.FC<{ markdown: string; maxLength?: number }> = ({ markdown, maxLength = 100 }) => {
+  // Basic preview: replace newlines with spaces and truncate
+  const previewText = markdown.replace(/\n+/g, ' ').trim();
+  const displayText = previewText.length > maxLength 
+    ? previewText.substring(0, maxLength) + '...' 
+    : previewText;
+
+  return (
+    <span title={markdown}> {/* Show full text on hover */}
+      {displayText}
+    </span>
+  );
+};
+// --- END NEW --- 

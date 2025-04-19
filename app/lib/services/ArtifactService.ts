@@ -651,7 +651,18 @@ export class ArtifactService {
       console.log(`Successfully created artifact with ID: ${artifactId}`);
       return true;
     } catch (err) {
-      console.error('Exception creating artifact with specified ID:', err);
+      // Log the specific error object and potentially its properties
+      console.error('Exception caught in createArtifactWithId:', err); 
+      // Add more detail if 'err' is an object with specific properties
+      if (err instanceof Error) {
+        console.error('Error name:', err.name);
+        console.error('Error message:', err.message);
+        console.error('Error stack:', err.stack);
+      } else {
+        console.error('Caught error is not an instance of Error:', typeof err, err);
+      }
+      // Keep the original log for consistency, though it might be less informative now
+      console.error('Original console log line: Exception creating artifact with specified ID:', err); 
       return false;
     }
   }

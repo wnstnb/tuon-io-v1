@@ -3117,3 +3117,101 @@ a:hover {
 [data-panel-id="right-panel"].panel-animating {
   transition: flex-basis 0.3s ease-in-out;
 }
+
+/* Styles for the Follow-up Text Bubble in ChatInput */
+
+.follow-up-text-container {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px; /* Reduced padding */
+  margin-bottom: 6px; /* Slightly less margin */
+  border-radius: 4px; /* Slightly smaller radius */
+  /* --- Mimic Toast Success Style (adjust vars/colors as needed) --- */
+  background-color: var(--card-bg); /* Light mode green background */
+  border: 1px solid var(--text-primary); /* Light mode border */
+  font-size: 12px; /* Smaller font size */
+  color: var(--text-secondary); /* Darker text for light bg */
+  /* --- End Toast Style --- */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Dark mode adjustments */
+.dark .follow-up-text-container,
+@media (prefers-color-scheme: dark) {
+  .follow-up-text-container {
+     /* --- Mimic Toast Success Style (Dark) --- */
+    background-color: var(--toast-success-bg-dark, var(--success-bg-dark, #166534)); /* Dark mode green background */
+    border: 1px solid var(--toast-success-border-dark, var(--success-border-color-dark, #34d399)); /* Dark mode border */
+    color: var(--toast-success-text-dark, var(--success-text-color-dark, #f0fdf4)); /* Lighter text for dark bg */
+    /* --- End Toast Style (Dark) --- */
+  }
+}
+
+.follow-up-label {
+  font-weight: 500; /* Keep slightly bolder */
+  margin-right: 5px; /* Slightly less space */
+  white-space: nowrap;
+  /* Use the same color as the main text for simplicity */
+  color: inherit;
+}
+
+.follow-up-content {
+  flex-grow: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* Ensure content color is also inherited */
+  color: inherit;
+}
+
+/* Apply to the span inside .follow-up-content if using the RenderMarkdown component */
+.follow-up-content span {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle; /* Helps align text nicely */
+}
+
+.clear-follow-up-btn {
+  /* --- Style like the screenshot button --- */
+  background-color: rgba(255,255,255,0); /* White background */
+  /* border: 1px solid var(--button-secondary-border, #d1d5db); Light gray border */
+  color: var(--button-secondary-text, #1f2937); /* Dark text/icon */
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0; /* Remove padding */
+  margin-left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; /* Fixed width */
+  height: 20px; /* Fixed height */
+  flex-shrink: 0; /* Prevent shrinking */
+  transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+/* Adjust icon size within the button */
+.clear-follow-up-btn > svg {
+  width: 14px;
+  height: 14px;
+}
+
+
+.clear-follow-up-btn:hover {
+  background-color: var(--button-secondary-bg-hover, #f9fafb);
+  border-color: var(--button-secondary-border-hover, #9ca3af);
+}
+
+/* Dark mode for the button */
+.dark .clear-follow-up-btn,
+@media (prefers-color-scheme: dark) {
+  .clear-follow-up-btn {
+    background-color: var(--button-secondary-bg-dark, #4b5563); /* Dark background */
+    border: 1px solid var(--button-secondary-border-dark, #6b7280); /* Darker border */
+    color: var(--button-secondary-text-dark, #f3f4f6); /* Light text/icon */
+  }
+   .clear-follow-up-btn:hover {
+    background-color: var(--button-secondary-bg-hover-dark, #556172);
+    border-color: var(--button-secondary-border-hover-dark, #7c8798);
+  }
+}

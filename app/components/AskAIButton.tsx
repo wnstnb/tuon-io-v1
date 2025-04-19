@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { type Block, type BlockNoteEditor } from '@blocknote/core';
 // import { useComponentsContext } from '@blocknote/react'; // REMOVED
-import { Sparkles, Send } from 'lucide-react'; 
+import { Sparkles, Send, CornerDownLeft } from 'lucide-react'; 
 import { useAI } from '../context/AIContext';
 
 interface AskAIButtonProps {
@@ -44,11 +44,12 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
   const [showInput, setShowInput] = useState(false);
   const [instruction, setInstruction] = useState('');
   const { isLoading, processEditorSelectionAction } = useAI(); 
-  const [isHovering, setIsHovering] = useState(false); // For hover style
+  const [isHoveringAI, setIsHoveringAI] = useState(false); // Renamed for clarity
+  const [isHoveringFollowUp, setIsHoveringFollowUp] = useState(false); // State for new button
   const [isSendHovering, setIsSendHovering] = useState(false); // For send button hover
   const selectedBlocksRef = useRef<Block[] | null>(null); // Ref to store selection
 
-  const handleButtonClick = useCallback(() => {
+  const handleAskAIButtonClick = useCallback(() => {
     if (!showInput) {
       // Capture selection *before* showing input and potentially losing focus
       const selection = editor.getSelection();
@@ -60,6 +61,46 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
     }
     setShowInput(prev => !prev);
   }, [editor, showInput]);
+
+  const handleFollowUpClick = useCallback(async () => {
+    const selection = editor.getSelection();
+    const selectedBlocks = selection?.blocks;
+
+    if (selectedBlocks && selectedBlocks.length > 0) {
+      try {
+        // Convert selected blocks to Markdown
+        const markdownText = await editor.blocksToMarkdownLossy(selectedBlocks);
+
+        // Dispatch custom event with the markdown text
+        const followUpEvent = new CustomEvent('editor:followUpText', {
+          detail: { text: markdownText }
+        });
+        window.dispatchEvent(followUpEvent);
+
+        // Optional: Close AI input if open, clear selection ref
+        setShowInput(false);
+        setInstruction('');
+        selectedBlocksRef.current = null;
+
+        // Optional: Dispatch a notification event (using the system you built in ChatInput)
+        window.dispatchEvent(new CustomEvent('chat:showNotification', {
+          detail: { message: 'Text added for follow-up.', type: 'success', duration: 2000 }
+        }));
+
+      } catch (error) {
+        console.error("Error converting blocks to markdown or dispatching event:", error);
+         // Optional: Notify user of error
+         window.dispatchEvent(new CustomEvent('chat:showNotification', {
+          detail: { message: 'Failed to add text for follow-up.', type: 'error' }
+        }));
+      }
+    } else {
+      // Optional: Notify user that text needs to be selected
+      window.dispatchEvent(new CustomEvent('chat:showNotification', {
+        detail: { message: 'Please select text to follow up on.', type: 'info' }
+      }));
+    }
+  }, [editor]);
 
   const handleSendClick = useCallback(async () => {
     // Use stored selection from the ref
@@ -123,17 +164,36 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
       type="button"
       key={'askAIButton'}
       title={'Ask AI about selection'} 
-      onClick={handleButtonClick}
+      onClick={handleAskAIButtonClick}
       style={{ 
         ...buttonStyle, 
-        ...(isHovering ? hoverStyle : {}) 
+        ...(isHoveringAI ? hoverStyle : {}) 
       }}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
+      onMouseEnter={() => setIsHoveringAI(true)}
+      onMouseLeave={() => setIsHoveringAI(false)}
     >
       <Sparkles size={18} />
     </button>
   );
+
+  // --- NEW: Follow Up Button ---
+  const followUpButton = (
+    <button
+      type="button"
+      key={'followUpButton'}
+      title={'Add selection for chat follow-up'}
+      onClick={handleFollowUpClick}
+      style={{
+        ...buttonStyle,
+        ...(isHoveringFollowUp ? hoverStyle : {})
+      }}
+      onMouseEnter={() => setIsHoveringFollowUp(true)}
+      onMouseLeave={() => setIsHoveringFollowUp(false)}
+    >
+      <CornerDownLeft size={18} />
+    </button>
+  );
+  // --- END NEW ---
 
   const inputArea = showInput ? (
     <div 
@@ -172,6 +232,7 @@ export default function AskAIButton({ editor }: AskAIButtonProps) {
   return (
     <>
       {aiButton}
+      {followUpButton}
       {inputArea}
     </>
   );

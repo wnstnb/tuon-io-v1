@@ -85,6 +85,7 @@ export class SearchService {
         query,
         {
           text: true,
+          livecrawl: "always",
           numResults: limit
         }
       );
