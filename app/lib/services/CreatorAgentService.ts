@@ -246,20 +246,17 @@ export class CreatorAgentService {
 
         const isNewConversation = conversationHistory.length < 2; // Consider history length
 
-        if (editorMarkdownContent && (intentAnalysis.destination === 'EDITOR' || isNewConversation)) {
-          // Prioritize editor content if intent is EDITOR or conversation is new
-          systemPrompt += `\n\n**Primary Context: Current Editor Content**\n\`\`\`markdown\n${editorMarkdownContent}\n\`\`\`\n\nYour main goal is to understand, analyze, or modify the **Primary Context (Editor Content)** based on the user's request. Conversation history is secondary context.`;
-          if (intentAnalysis.destination === 'EDITOR') {
-             systemPrompt += `\nRespond *only* with the updated markdown content for the editor if the goal is to modify it. Do not include conversational filler.`;
-          } else {
-             // If conversation is new but intent isn't EDITOR, still acknowledge editor context but ask for chat response
-             systemPrompt += `\nProvide a helpful chat response related to the user's query about the editor content.`;
-          }
+        if (editorMarkdownContent && intentAnalysis.destination === 'EDITOR') {
+          // Prioritize editor content if intent is EDITOR
+          systemPrompt += `\n\n**Primary Context: Current Editor Content**\n\`\`\`markdown\n${editorMarkdownContent}\n\`\`\`\n\nYour main goal is to understand, analyze, or modify the **Primary Context (Editor Content)** based on the user's request. Conversation history is secondary context. Respond *only* with the updated markdown content for the editor. Do not include conversational filler.`;
+        } else if (editorMarkdownContent && intentAnalysis.destination === 'CONVERSATION') {
+          // NEW: Explicit handling for CONVERSATION with editor context
+          systemPrompt += `\n\n**Context: Current Editor Content**\n\`\`\`markdown\n${editorMarkdownContent}\n\`\`\`\n\nYour goal is to have a helpful conversation with the user. Use the provided Editor Content **only as context** to inform your chat response regarding the user's query. Do NOT output modified editor content or Markdown unless explicitly asked to in a separate request. Focus on the conversational aspect.`;
         } else if (intentAnalysis.destination === 'EDITOR') {
-           // Intent is EDITOR but no content provided or conversation isn't new
+           // Intent is EDITOR but no content provided
            systemPrompt += `\nYour goal is to generate content suitable for the editor based on the user's request. Respond *only* with the markdown content for the editor.`;
         } else {
-          // Standard conversation
+          // Standard conversation without specific editor context emphasis
           systemPrompt += ` Provide a helpful chat response based on the conversation history and the user's current request.`;
         }
         messages.push({ role: 'system', content: systemPrompt });
@@ -267,9 +264,10 @@ export class CreatorAgentService {
 
         // Add Conversation History (secondary context marker added if editor content is primary)
         if (conversationHistory.length > 0) {
-            if (editorMarkdownContent && (intentAnalysis.destination === 'EDITOR' || isNewConversation)) {
-                 messages.push({ role: 'system', content: '**Secondary Context: Conversation History**' });
-            }
+            // Removed the secondary context marker logic here as the system prompt now clarifies context priority
+            // if (editorMarkdownContent && (intentAnalysis.destination === 'EDITOR' || isNewConversation)) {
+            //      messages.push({ role: 'system', content: '**Secondary Context: Conversation History**' });
+            // }
             for (const msg of conversationHistory) {
                 if (msg.role === 'user' && msg.imageUrl && typeof msg.imageUrl === 'string') {
                     try {
@@ -330,13 +328,11 @@ export class CreatorAgentService {
          let initialSystemInstruction = `User Intent: ${intentAnalysis.destination}.`;
          const isNewConversation = conversationHistory.length < 2; // Consider history length
 
-         if (editorMarkdownContent && (intentAnalysis.destination === 'EDITOR' || isNewConversation)) {
-           initialSystemInstruction += `\n\n**Primary Context: Current Editor Content**\n\`\`\`markdown\n${editorMarkdownContent}\n\`\`\`\n\nGoal: Understand, analyze, or modify the **Primary Context (Editor Content)** based on the user's request. Conversation history is secondary context.`;
-           if (intentAnalysis.destination === 'EDITOR') {
-              initialSystemInstruction += ` Respond *only* with the updated markdown content.`;
-           } else {
-              initialSystemInstruction += ` Provide a helpful chat response related to the editor content.`;
-           }
+         if (editorMarkdownContent && intentAnalysis.destination === 'EDITOR') {
+           initialSystemInstruction += `\n\n**Primary Context: Current Editor Content**\n\`\`\`markdown\n${editorMarkdownContent}\n\`\`\`\n\nGoal: Understand, analyze, or modify the **Primary Context (Editor Content)** based on the user's request. Conversation history is secondary context. Respond *only* with the updated markdown content.`;
+         } else if (editorMarkdownContent && intentAnalysis.destination === 'CONVERSATION') {
+            // NEW: Explicit handling for CONVERSATION with editor context
+            initialSystemInstruction += `\n\n**Context: Current Editor Content**\n\`\`\`markdown\n${editorMarkdownContent}\n\`\`\`\n\nGoal: Have a helpful conversation. Use the Editor Content **only as context** for your chat response regarding the user's query. Do NOT output modified editor content or Markdown unless explicitly asked to in a separate request. Focus on the conversational aspect.`;
          } else if (intentAnalysis.destination === 'EDITOR') {
            initialSystemInstruction += `\nGoal: Generate markdown content for the editor. Respond *only* with the markdown content.`;
          } else {

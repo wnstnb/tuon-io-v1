@@ -171,14 +171,15 @@ Analyze the user's intent based on their input and the editor context. Determine
     * Reformatting content (e.g., changing style, applying markdown, fixing indentation).
     * Generating structured content based on instructions (e.g., "list the pros and cons", "brainstorm ideas for X", "summarize this section", "expand on this point").
     * Referencing specific files, sections, or elements for modification.
-    * **Keywords often indicating EDITOR:** *Write, research, create, add, insert, change, update, modify, delete, remove, replace, rewrite, format, reformat, summarize, expand, list, brainstorm, generate, put, make...* (when followed by content specifics).
+    * **Keywords often indicating EDITOR:** *Write, research, create, add, insert, change, update, modify, delete, remove, replace, rewrite, format, reformat, summarize, expand, list, brainstorm, generate, put, make...* (when followed by content specifics or implying direct action on the document).
 
 2.  **Engage in conversation or seek information:**
     * Asking for explanations or definitions (e.g., "What is Python?", "Explain brainstorming techniques").
+    * **Discussion on content within the editor that does *not* request or imply direct modification.** This includes asking for opinions, evaluations, or feedback on the existing text. (e.g., "What are your thoughts on this section?", "Evaluate this part of the text.", "Does this paragraph make sense?", "Can you critique this argument?")
     * Asking *how* to do something in the editor or in general (e.g., "How do I add a table?", "How does this feature work?").
     * Asking general knowledge questions.
     * Making general statements or engaging in meta-conversation about the AI or the process.
-    * **Keywords often indicating CONVERSATION:** *Explain, tell me about, what is, how do I, can you, why, describe, compare...*
+    * **Keywords often indicating CONVERSATION:** *Explain, tell me about, what is, how do I, can you, why, describe, compare, what do you think, evaluate, critique, feedback, does this make sense...*
 
 ### Web Search Detection:
 Also determine if the request would benefit from a web search:
@@ -201,6 +202,7 @@ If you determine the destination is EDITOR, also classify the specific operation
 ### Ambiguity Handling:
 * If the user asks *how* to do something (e.g., "How do I make a list?"), lean towards **CONVERSATION**.
 * If the user directly commands the action (e.g., "Make a list of action items"), lean towards **EDITOR**.
+* **Crucially:** If the user asks for an opinion, evaluation, or feedback about existing editor content (e.g., "What do you think of this paragraph?", "Critique this section"), classify as **CONVERSATION**, even if editor context is present. Only classify as EDITOR if they explicitly ask for a change (e.g., "Rewrite this paragraph", "Improve this section").
 * If unsure, have a slight bias towards **CONVERSATION** to avoid unintended editor modifications, but use the confidence score to reflect uncertainty.
 
 ### CRITICAL RESPONSE FORMAT INSTRUCTIONS:

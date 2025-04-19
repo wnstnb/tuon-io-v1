@@ -644,6 +644,46 @@ function EditorPageContent() {
     // Remove handleTitleChange from dependencies, add editorContent and debouncedLocalSave
   }, [user, title, userHasManuallySetTitle, setUserHasManuallySetTitle, editorContent, debouncedLocalSave, setIsEditorProcessing]); // <-- Added setIsEditorProcessing dependency
 
+  // --- NEW: Debounced Check and Inference Function ---
+  const checkAndInferTitleDebounced = useMemo(() =>
+    debounce((contentToCheck: Block[], sourceArtifactIdToCheck?: string) => {
+        if (!isMounted.current) return;
+
+        // Perform the checks *inside* the debounced function using current state
+        if (!sourceArtifactIdToCheck &&
+            title === 'Untitled Artifact' &&
+            !userHasManuallySetTitle &&
+            contentToCheck.length > 0 &&
+            !isEditorProcessing
+            ) {
+            const artifactIdForInference = currentArtifactId; // Use current artifact ID
+            if (artifactIdForInference) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`[InferTitle Check - DEBOUNCED] Conditions met. Triggering inference for artifact ${artifactIdForInference}.`);
+                }
+                // Call the original, non-debounced inferTitle
+                inferTitle(artifactIdForInference, contentToCheck);
+            } else {
+                 if (process.env.NODE_ENV === 'development') {
+                    console.warn('[InferTitle Check - DEBOUNCED] Cannot infer title, missing artifact ID.');
+                 }
+            }
+        } else {
+             // Optional: Log why it skipped *after* the debounce
+             // if (process.env.NODE_ENV === 'development') {
+             //     console.log(`[InferTitle Check - DEBOUNCED] Skipped. Conditions:`, {
+             //        sourceArtifactIdToCheck,
+             //        title,
+             //        userHasManuallySetTitle,
+             //        contentLength: contentToCheck.length,
+             //        isEditorProcessing,
+             //     });
+             // }
+        }
+    }, 1500, { leading: false, trailing: true })
+  // Dependencies: Include all states checked inside the debounced function + inferTitle
+  , [title, userHasManuallySetTitle, isEditorProcessing, currentArtifactId, inferTitle]);
+
   // --- Load Artifact Function ---
   const loadArtifact: (idToLoad: string, user: User) => Promise<void> = useCallback(async (idToLoad, user) => {
     // NEW Check: Prevent UI flash if loading the same ID (e.g., on tab focus)
@@ -796,10 +836,10 @@ function EditorPageContent() {
   // --- NEW useEffect for Conversation Linking ---
   useEffect(() => {
     // Only run if:
-    // 1. Artifact has finished loading (isArtifactLoaded is true)
-    // 2. Conversations are NOT currently loading (isLoadingConversations is false)
-    // 3. We have a valid user and currentArtifactId
-    if (isArtifactLoaded && !isLoadingConversations && user && currentArtifactId) {
+    // 1. Conversations are NOT currently loading (isLoadingConversations is false)
+    // 2. We have a valid user and currentArtifactId
+    // 3. We have finished the initial conversation loading phase.
+    if (!isLoadingConversations && user && currentArtifactId) {
       if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Running for artifact ${currentArtifactId}. Conversations loaded: ${!isLoadingConversations}`);
       
       const existingConversation = findConversationByArtifactId(currentArtifactId);
@@ -817,19 +857,34 @@ function EditorPageContent() {
         // Pass the artifact ID to create a new, linked conversation
         // Using an IIAFE (Immediately Invoked Async Function Expression) as useEffect cannot be async directly
         (async () => {
-          await createNewConversation(undefined, currentArtifactId);
-          if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] createNewConversation called for artifact ${currentArtifactId}.`);
+          // Check again inside async IIFE to prevent race conditions if artifactId changes quickly
+          // Only create if the *current* currentArtifactId still doesn't have a conversation
+          // We specifically check the *state* variable 'currentArtifactId' again inside the async function
+          // to get its latest value at the time of execution, rather than relying on the value captured when the effect first ran.
+          const currentIdSnapshot = currentArtifactId; // Take snapshot for logging consistency if needed
+          const checkAgain = findConversationByArtifactId(currentIdSnapshot); 
+          if (!checkAgain) {
+             if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] IIFE check passed for ${currentIdSnapshot}. Calling createNewConversation.`);
+             // Pass the snapshot ID to ensure we create for the intended artifact
+             await createNewConversation(undefined, currentIdSnapshot); 
+             if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] createNewConversation called for artifact ${currentIdSnapshot}.`);
+          } else {
+             if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] IIFE check found conversation ${checkAgain.id} for ${currentIdSnapshot}. Creation skipped.`);
+             // Optionally select it if it wasn't selected before (edge case)
+             if (currentConversation?.id !== checkAgain.id) {
+               selectConversation(checkAgain.id);
+             }
+          }
         })();
       }
       
-      // Reset the trigger flag after execution
-      setIsArtifactLoaded(false); 
+      // setIsArtifactLoaded(false); // <-- REMOVED THIS LINE
     } else {
        // Optional: Log why it didn't run
-       // if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Skipped. isArtifactLoaded: ${isArtifactLoaded}, isLoadingConversations: ${isLoadingConversations}, user: ${!!user}, currentArtifactId: ${currentArtifactId}`);
+       if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Skipped. isLoadingConversations: ${isLoadingConversations}, user: ${!!user}, currentArtifactId: ${currentArtifactId}`);
     }
   }, [
-    isArtifactLoaded, 
+    // isArtifactLoaded, // <-- REMOVED
     isLoadingConversations, 
     currentArtifactId, 
     user, 
@@ -921,29 +976,11 @@ function EditorPageContent() {
       // Trigger the debounce on content change, passing the new content and current title
       debouncedLocalSave(content, title);
 
-      // Only trigger title inference if this is a user edit (no sourceArtifactId)
-      // and we haven't already inferred or set a title, AND we are not currently processing
-      if (!sourceArtifactId &&
-          title === 'Untitled Artifact' &&
-          !userHasManuallySetTitle &&
-          content.length > 0 &&
-          !isEditorProcessing
-          ) {
-        const artifactIdForInference = currentArtifactId;
-        if (artifactIdForInference) {
-          if (process.env.NODE_ENV === 'development') {
-             console.log(`[InferTitle Check - ContentChange] Conditions met. Triggering inference for artifact ${artifactIdForInference}.`);
-          }
-          // Call inferTitle directly (now defined above)
-          inferTitle(artifactIdForInference, content);
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('[InferTitle Check - ContentChange] Cannot infer title, missing artifact ID.');
-          }
-        }
-      }
+      // --- MODIFIED: Call the debounced check function --- 
+      checkAndInferTitleDebounced(content, sourceArtifactId);
+      // --- END MODIFICATION ---
     }
-  }, [user, currentArtifactId, title, userHasManuallySetTitle, debouncedLocalSave, inferTitle, isEditorProcessing]); // Added title, userHasManuallySetTitle, and isEditorProcessing
+  }, [user, currentArtifactId, title, userHasManuallySetTitle, debouncedLocalSave, isEditorProcessing, checkAndInferTitleDebounced]); // Removed inferTitle, added checkAndInferTitleDebounced
 
   // Memoize editor props (Ensure handleContentChange/handleTitleChange are stable via useCallback)
   const editorProps = useMemo(() => {
