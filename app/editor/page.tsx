@@ -65,7 +65,8 @@ function EditorPageContent() {
     selectConversation, 
     createNewConversation,
     currentConversation,
-    isLoading: isAILoading
+    isLoading: isAILoading,
+    isLoadingConversations
   } = useAI();
 
   const [title, setTitle] = useState<string>('Untitled Artifact');
@@ -90,10 +91,11 @@ function EditorPageContent() {
     } catch (e) { console.warn("Failed to clear initial localStorage"); }
     return newId;
   });
+  const [isArtifactLoaded, setIsArtifactLoaded] = useState<boolean>(false);
   const [isArtifactPersisted, setIsArtifactPersisted] = useState<boolean>(!!artifactIdParam);
   const [isDirty, setIsDirty] = useState<boolean>(false); // Editor state vs Local Storage state
   const [isSyncPending, setIsSyncPending] = useState<boolean>(false); // Local Storage state vs DB state
-  const [isSyncing, setIsSyncing] = useState<boolean>(false); // DB sync operation in progress
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null); // Store last sync error message
   const [userHasManuallySetTitle, setUserHasManuallySetTitle] = useState<boolean>(false); // NEW: Track manual title edits
   const [pendingSyncArtifactId, setPendingSyncArtifactId] = useState<string | null>(null); // ID waiting for DB sync
@@ -654,6 +656,7 @@ function EditorPageContent() {
       setIsArtifactPersisted(false); // Assume not persisted until confirmed
       setCurrentArtifactId(idToLoad); // Set the ID being loaded
       setUserHasManuallySetTitle(false); // NEW: Reset manual title flag on load
+      setIsArtifactLoaded(false); // Reset artifact loaded flag
     }
 
     let loadedTitle = 'Untitled Artifact';
@@ -755,30 +758,10 @@ function EditorPageContent() {
            // If nothing was loaded, clear local storage just in case
            localStorage.removeItem(`artifact-data-${idToLoad}`);
         }
-      }
 
-      // --- NEW: Find or Create Linked Conversation --- //
-      if (isMounted.current) {
-        if (process.env.NODE_ENV === 'development') console.log(`Attempting to find/create conversation linked to artifact ${idToLoad}`);
-        const existingConversation = findConversationByArtifactId(idToLoad);
-
-        if (existingConversation) {
-          if (process.env.NODE_ENV === 'development') console.log(`Found existing conversation ${existingConversation.id}, selecting it.`);
-          // Only select if it's not already the current one
-          if (currentConversation?.id !== existingConversation.id) {
-            selectConversation(existingConversation.id);
-          } else {
-            if (process.env.NODE_ENV === 'development') console.log(`Conversation ${existingConversation.id} is already selected.`);
-          }
-        } else {
-          if (process.env.NODE_ENV === 'development') console.log(`No existing conversation found for artifact ${idToLoad}. Creating a new one.`);
-          // Pass the artifact ID to create a new, linked conversation
-          // Model selection can be default or potentially based on user preferences later
-          await createNewConversation(undefined, idToLoad);
-          if (process.env.NODE_ENV === 'development') console.log(`createNewConversation called for artifact ${idToLoad}.`);
-        }
+        // --- Signal that artifact loading is complete ---
+        setIsArtifactLoaded(true); 
       }
-      // --- END Conversation Linking --- //
 
     } catch (error) {
       // Catch any unexpected errors during the loading/decision logic
@@ -789,9 +772,65 @@ function EditorPageContent() {
         setIsDirty(false);
         setIsSyncPending(false);
         setLastSyncError("Unexpected error loading artifact.");
+        setIsArtifactLoaded(false); // Ensure flag is false on error
       }
     }
-  }, [user, currentArtifactId, findConversationByArtifactId, selectConversation, createNewConversation, currentConversation]); // REMOVE inferTitle from here
+  }, [
+    user, 
+    currentArtifactId,
+    // Restore original dependencies to ensure stability with effects relying on loadArtifact
+    findConversationByArtifactId, 
+    selectConversation, 
+    createNewConversation, 
+    currentConversation 
+  ]); // <-- RESTORED AI Context dependencies 
+
+  // --- NEW useEffect for Conversation Linking ---
+  useEffect(() => {
+    // Only run if:
+    // 1. Artifact has finished loading (isArtifactLoaded is true)
+    // 2. Conversations are NOT currently loading (isLoadingConversations is false)
+    // 3. We have a valid user and currentArtifactId
+    if (isArtifactLoaded && !isLoadingConversations && user && currentArtifactId) {
+      if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Running for artifact ${currentArtifactId}. Conversations loaded: ${!isLoadingConversations}`);
+      
+      const existingConversation = findConversationByArtifactId(currentArtifactId);
+
+      if (existingConversation) {
+        if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Found existing conversation ${existingConversation.id}, selecting it.`);
+        // Only select if it's not already the current one
+        if (currentConversation?.id !== existingConversation.id) {
+          selectConversation(existingConversation.id);
+        } else {
+          if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Conversation ${existingConversation.id} is already selected.`);
+        }
+      } else {
+        if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] No existing conversation found for artifact ${currentArtifactId}. Creating a new one.`);
+        // Pass the artifact ID to create a new, linked conversation
+        // Using an IIAFE (Immediately Invoked Async Function Expression) as useEffect cannot be async directly
+        (async () => {
+          await createNewConversation(undefined, currentArtifactId);
+          if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] createNewConversation called for artifact ${currentArtifactId}.`);
+        })();
+      }
+      
+      // Reset the trigger flag after execution
+      setIsArtifactLoaded(false); 
+    } else {
+       // Optional: Log why it didn't run
+       // if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Skipped. isArtifactLoaded: ${isArtifactLoaded}, isLoadingConversations: ${isLoadingConversations}, user: ${!!user}, currentArtifactId: ${currentArtifactId}`);
+    }
+  }, [
+    isArtifactLoaded, 
+    isLoadingConversations, 
+    currentArtifactId, 
+    user, 
+    findConversationByArtifactId, 
+    selectConversation, 
+    createNewConversation, 
+    currentConversation?.id // Include currentConversation.id to re-run if selection changes externally
+  ]);
+  // --- END NEW useEffect for Conversation Linking ---
 
   // --- Handle Title Change Function ---
   const handleTitleChange = useCallback((newTitle: string) => {
@@ -1023,13 +1062,18 @@ function EditorPageContent() {
 
   }, [isBottomPanelCollapsed, bottomPanelSize]);
 
-  // Listen for artifact selection events from FileExplorer
+  // --- Listen for artifact selection events --- //
   useEffect(() => {
     const handleArtifactSelected = (event: CustomEvent) => {
+      if (!event.detail || !event.detail.artifactId) {
+        console.warn("[artifactSelected Listener] Received event with missing artifactId.");
+        return;
+      }
       const { artifactId: selectedId } = event.detail;
+      
       // --- DIAGNOSTIC LOG --- 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[Nav Check - artifactSelected Event] Received event`, {
+        console.log(`[artifactSelected Listener] Received event`, {
           selectedId,
           currentArtifactId,
           userExists: !!user,
@@ -1038,42 +1082,58 @@ function EditorPageContent() {
       }
       // --- END LOG --- 
 
+      // Proceed only if user exists, selectedId is valid, and different from current ID
       if (selectedId && user && selectedId !== currentArtifactId) {
-        // --- DIAGNOSTIC LOG --- 
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[Nav Check - artifactSelected Event] Condition PASSED. Proceeding to load ${selectedId}`);
+          console.log(`[artifactSelected Listener] Condition PASSED. Preparing to load ${selectedId}`);
         }
-        // --- END LOG --- 
 
-        // Flush any pending local save for the OLD artifact FIRST
+        // --- Handle Pending Saves/Syncs Before Switching --- //
+        // 1. Flush debounced local save for the *current* artifact
         try {
-          if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] Flushing potential pending save for ${currentArtifactId}...`);
-          debouncedLocalSave.flush(); // <-- Changed from cancel()
-          if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] Flush complete.`);
+          if (process.env.NODE_ENV === 'development') console.log(`[artifactSelected Listener] Flushing potential pending local save for ${currentArtifactId}...`);
+          debouncedLocalSave.flush(); 
+          if (process.env.NODE_ENV === 'development') console.log(`[artifactSelected Listener] Debounced save flushed.`);
         } catch (flushError) {
-          console.error("[Nav Check - artifactSelected Event] Error during debouncedLocalSave.flush():", flushError);
+          console.error("[artifactSelected Listener] Error during debouncedLocalSave.flush():", flushError);
         }
 
-        // Now check if sync is pending (could have become true after flush)
-        if (isSyncPending && isMounted.current) { // Check isSyncPending *after* flush
-           console.warn("[Nav Check - artifactSelected Event] Switching artifact with pending server changes. Attempting final sync...");
+        // 2. Check if sync is pending *after* flush and trigger immediate sync if needed
+        // Use a temporary variable to check the state *after* the flush might have updated it
+        const needsImmediateSync = isSyncPending; 
+        if (needsImmediateSync && isMounted.current) {
+           console.warn("[artifactSelected Listener] Switching artifact with pending server changes. Attempting final sync...");
            try {
-              latestSyncFn.current(); // Use the ID stored in pendingSyncArtifactId
-              if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] latestSyncFn attempt complete.`);
+              // Call the core sync logic directly, ensuring it uses the correct (old) artifact ID
+              latestSyncFn.current(currentArtifactId); // Pass the ID explicitly
+              if (process.env.NODE_ENV === 'development') console.log(`[artifactSelected Listener] latestSyncFn attempt complete for old artifact ${currentArtifactId}.`);
            } catch (syncError) {
-             console.error("[Nav Check - artifactSelected Event] Error during latestSyncFn():", syncError);
+             console.error("[artifactSelected Listener] Error during final sync attempt:", syncError);
+             // Decide if navigation should proceed despite sync error - currently it does
            }
         }
+        // --- End Handling Pending --- //
 
-        if (process.env.NODE_ENV === 'development') console.log(`[Nav Check - artifactSelected Event] Calling loadArtifact(${selectedId})...`);
+        if (process.env.NODE_ENV === 'development') console.log(`[artifactSelected Listener] Calling loadArtifact(${selectedId})...`);
+        // Call loadArtifact with the new ID
         loadArtifact(selectedId, user);
+      } else {
+         if (process.env.NODE_ENV === 'development') console.log(`[artifactSelected Listener] Skipped loading artifact. Reason:`, {selectedId, user: !!user, differentId: selectedId !== currentArtifactId });
       }
     };
+
+    // Add the event listener
     window.addEventListener('artifactSelected', handleArtifactSelected as EventListener);
+    console.log("[artifactSelected Listener] Attached."); // Log attachment
+
+    // Cleanup function to remove the listener
     return () => {
       window.removeEventListener('artifactSelected', handleArtifactSelected as EventListener);
+      console.log("[artifactSelected Listener] Removed."); // Log removal
     };
-  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]); // REMOVED AI context dependencies
+    // Dependencies: user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave, latestSyncFn
+  }, [user, loadArtifact, currentArtifactId, isSyncPending, debouncedLocalSave]);
+  // --- END Listen for artifact selection events --- //
 
   // Show a loading state only if Supabase user data is still loading
   if (isSupabaseLoading) {
