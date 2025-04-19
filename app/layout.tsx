@@ -5,9 +5,7 @@ import '@blocknote/core/fonts/inter.css';
 import '@blocknote/mantine/style.css';
 import './globals.css';
 import './styles/components/file-explorer.css';
-import 'react-toastify/dist/ReactToastify.css';
 import ClientProviders from './context/ClientProviders';
-import { ToastContainer, Flip } from 'react-toastify';
 
 const inter = Inter({ subsets: ['latin'] });
 const jetbrainsMono = JetBrains_Mono({ 
@@ -31,19 +29,6 @@ export default function RootLayout({
       <body className={`${inter.className} ${jetbrainsMono.variable}`}>
         <ClientProviders>
           {children}
-          <ToastContainer
-            position="bottom-center"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop={false}
-            closeOnClick={false}
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="dark"
-            transition={Flip}
-          />
         </ClientProviders>
       </body>
     </html>

@@ -43,11 +43,16 @@
   --success-color: #22c55e; /* Keep existing */
   --info-color: #FAD89D; /* Golden Sand */
   --primary-color-dark: #B38A58; /* Wheat Bronze */
+  /* NEW Info Notification Colors */
+  --info-bg: #FEF6E7; /* Light Yellow/Orange */
+  --info-text: #C77A0A; /* Dark Orange/Brown */
+  --info-border: #FAD89D; /* Golden Sand */
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
   --overlay-bg: rgba(0, 0, 0, 0.6);
+  --code-bg: #f8f9fa; /* Light gray background for code blocks */
 }
 
 [data-theme='dark'] {
@@ -93,6 +98,10 @@
   --success-color: #4ade80; /* Keep existing */
   --info-color: #F1C37D; /* Luminous Amber */
   --primary-color-dark: #8C6638; /* Burnished Bronze */
+  /* NEW Info Notification Colors */
+  --info-bg: #4D381A; /* Dark Amber/Brown */
+  --info-text: #F1C37D; /* Luminous Amber */
+  --info-border: #F1C37D; /* Luminous Amber */
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
@@ -240,13 +249,14 @@ h1 {
 
 .title-bar {
   max-width: 100%;
-  max-height: 48px;
+  /* max-height: 48px; */
   margin: 0;
-  padding: 0.5rem 2rem;
+  /* Reduce vertical padding further */
+  padding: 0.25rem 3.1em; 
   border-bottom: 1px solid var(--border-color);
   transition: border-color 0.3s ease;
   display: flex;
-  align-items: center;
+  align-items: baseline;
 }
 
 .save-status-container {
@@ -261,9 +271,9 @@ h1 {
   justify-content: center;
   background: transparent;
   color: var(--text-color);
-  border: 1px solid var(--border-color);
+  border: 0px solid var(--border-color);
   border-radius: 4px;
-  padding: 0.25rem;
+  padding: 0rem;
   cursor: pointer;
   transition: all 0.2s ease;
   margin-right: 0.5rem;
@@ -285,13 +295,17 @@ h1 {
 }
 
 .title-display {
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
   color: var(--text-color);
   cursor: pointer;
-  padding: 0.25rem 0;
+  padding: 0; 
   transition: color 0.3s ease;
-  line-height: 1.2;
+  /* line-height: 1.2; */ /* REMOVED explicit line-height */
+  /* NEW: Add flex alignment */
+  display: inline-flex; /* Use inline-flex to keep it from taking full width */
+  align-items: center; 
 }
 
 .title-display:hover {
@@ -299,15 +313,20 @@ h1 {
 }
 
 .title-input {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 600; /* Match display weight */
+  font-family: 'JetBrains Mono', monospace;
   color: var(--text-color);
   background: transparent;
   border: none;
   border-bottom: 2px solid var(--primary-color);
   outline: none;
   width: 100%;
-  padding: 0.25rem 0;
+  padding: 0;
+  /* line-height: 1.2; */ /* REMOVED explicit line-height */
+  /* NEW: Add flex alignment */
+  display: inline-flex; /* Use inline-flex */
+  align-items: center;
 }
 
 .theme-toggle {
@@ -415,7 +434,15 @@ h1 {
 /* PanelGroup styles */
 [data-panel-id] {
   overflow: auto;
-  transition: flex-basis 0.3s ease;
+  /* Ensure no general transition here */
+}
+
+/* Add transition directly to the right panel */
+[data-panel-id="right-panel"] {
+  /* transition: flex-basis 0.3s ease-in-out; */ /* REMOVE or COMMENT OUT this line */
+  /* Ensure overflow is still handled if needed, 
+     but it might already be handled by the default [data-panel-id] rule */
+  /* overflow: auto; */ 
 }
 
 [data-panel-group-id] {
@@ -936,6 +963,7 @@ h1 {
 .chat-message {
   display: flex;
   gap: 12px;
+  font-size: 14px;
   max-width: 100%;
 }
 
@@ -2650,13 +2678,15 @@ html.dark .ai-status-indicator {
   bottom: 0;
   left: 0; /* Adjust based on main layout */
   right: 0; /* Adjust based on main layout */
-  width: 80%; /* Match app-container max-width */
+  width: 70%; /* Match app-container max-width */
+  min-width: 50%; /* Match app-container max-width */
   margin: 0 auto; /* Center it like app-container */
   z-index: 100; /* Ensure it's above editor content */
-  background-color: var(--bg-color); /* Give it a background */
-  border-top: 1px solid var(--border-color);
-  padding: 0.75rem; /* Match original padding */
-  box-shadow: var(--shadow-lg); /* Optional: Add shadow for separation */
+  /* background-color: var(--bg-color); */
+  background-color: rgba(255,255,255,0);
+  /* border-top: 1px solid var(--border-color); */
+  padding: 0rem; /* Match original padding */
+  /* box-shadow: var(--shadow-lg); Optional: Add shadow for separation */
 }
 
 /* Ensure the pinned input uses the existing internal layout */
@@ -2669,44 +2699,84 @@ html.dark .ai-status-indicator {
   /* Maybe slightly less max height? */
 }
 
-.pinned-chat-toast {
-  position: fixed;
-  bottom: 80px; /* Adjust based on pinned input height */
-  right: 20px;
-  background-color: var(--card); /* Or your preferred background */
-  color: var(--card-foreground);
+/* REMOVED .pinned-chat-toast styles */
+
+/* NEW: Inline Chat Input Notification */
+.chat-input-notification {
+  position: absolute;
+  bottom: calc(100% + 8px); /* Position above the input container with 8px gap */
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 15px;
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  z-index: 1000; /* Ensure it overlays other content */
-  max-width: 300px;
-  transition: opacity 0.3s ease-in-out;
+  z-index: 50; /* Below pinned input (z-index 100) but above editor */
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
   opacity: 1;
+  transform: translateY(0);
+  margin-bottom: 8px; /* Space between notification and input */
+  margin-left: 0.75rem; /* Align with input padding */
+  margin-right: 0.75rem; /* Align with input padding */
 }
 
-.pinned-chat-toast .loading-content {
-  display: flex;
-  align-items: center;
+.chat-input-notification.info {
+  background-color: var(--info-bg);
+  color: var(--info-text);
+  border: 1px solid var(--info-border);
 }
 
-.pinned-chat-toast .toast-message {
-  margin: 0;
+.chat-input-notification.success {
+  background-color: var(--success-bg, #dcfce7);
+  color: var(--success-text, #166534);
+  border: 1px solid var(--success-border, #86efac);
+}
+
+.chat-input-notification.error {
+  background-color: var(--error-bg, #fee2e2);
+  color: var(--error-text, #991b1b);
+  border: 1px solid var(--error-border, #fca5a5);
+}
+
+.notification-message {
+  flex-grow: 1;
+  margin-right: 10px;
   font-size: 0.9rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Add styles for hidden state if needed, e.g., for animations */
-/* .pinned-chat-toast.hidden {
+.notification-close-btn {
+  background: transparent;
+  border: none;
+  color: inherit; /* Inherit color from parent */
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.notification-close-btn:hover {
+  opacity: 1;
+}
+
+/* Style for hidden state (optional animation) */
+/* .chat-input-notification.hidden {
   opacity: 0;
+  transform: translateY(10px);
   pointer-events: none;
 } */
 
-
 /* Adjust main content padding when input is pinned */
 .main-content-padded-bottom {
-  padding-bottom: 148px !important; /* Adjust based on pinned input height */
+  padding-bottom: 120px !important; /* Adjust based on pinned input height */
 }
 
 /* Hide the original chat input wrapper when the panel is collapsed */
@@ -2880,4 +2950,169 @@ a:hover {
 [data-theme='dark'] ::selection {
   background-color: #C79553;
   color: white;
+}
+
+/* Markdown Content Styles */
+.markdown-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-color);
+  white-space: normal;
+}
+
+.markdown-content > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-p {
+  margin: 0;
+  display: inline;
+}
+
+.markdown-p + .markdown-p {
+  margin-top: 0;
+  margin-left: 0.25em;
+}
+
+.markdown-h1,
+.markdown-h2,
+.markdown-h3,
+.markdown-h4,
+.markdown-h5,
+.markdown-h6 {
+  margin: 0.5em 0 0.25em 0;
+  font-weight: 600;
+  line-height: 1.25;
+  display: block;
+}
+
+.markdown-h1:first-child,
+.markdown-h2:first-child,
+.markdown-h3:first-child,
+.markdown-h4:first-child,
+.markdown-h5:first-child,
+.markdown-h6:first-child {
+  margin-top: 0;
+}
+
+.markdown-h1 { font-size: 1.5em; }
+.markdown-h2 { font-size: 1.3em; }
+.markdown-h3 { font-size: 1.2em; }
+.markdown-h4 { font-size: 1.1em; }
+.markdown-h5 { font-size: 1em; }
+.markdown-h6 { font-size: 0.9em; }
+
+.markdown-ul,
+.markdown-ol {
+  margin: 0.5em 0;
+  padding-left: 2em;
+  display: block;
+}
+
+.markdown-li {
+  margin: 0;
+  display: list-item;
+}
+
+.markdown-li + .markdown-li {
+  margin-top: 0.25em;
+}
+
+.markdown-code-inline {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background-color: var(--code-bg);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+.markdown-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background-color: var(--code-bg);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+.markdown-pre {
+  background-color: var(--code-bg);
+  padding: 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.markdown-pre .markdown-code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.markdown-blockquote {
+  margin: 0.5em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--border-color);
+  color: var(--text-color-secondary);
+}
+
+.markdown-a {
+  color: var(--accent-color);
+  text-decoration: none;
+}
+
+.markdown-a:hover {
+  text-decoration: underline;
+}
+
+.markdown-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.markdown-th,
+.markdown-td {
+  border: 1px solid var(--border-color);
+  padding: 0.5em;
+}
+
+.markdown-th {
+  background-color: var(--bg-color-tertiary);
+}
+
+.markdown-img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.markdown-hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 1em 0;
+}
+
+/* Ensure markdown content doesn't overflow */
+.message-bubble .markdown-content {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Remove extra spacing between elements */
+.markdown-content > * + * {
+  margin-top: 0.5em;
+}
+
+/* Ensure no extra space after the last element */
+.markdown-content > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Add transition only when the panel is animating */
+[data-panel-id="right-panel"].panel-animating {
+  transition: flex-basis 0.3s ease-in-out;
 }
