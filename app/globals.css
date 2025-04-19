@@ -50,8 +50,8 @@
   /* Shadow variables */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
-  --overlay-bg: rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --overlay-bg: rgba(0, 0, 0, 0.8);
   --code-bg: #f8f9fa; /* Light gray background for code blocks */
 }
 
@@ -107,6 +107,7 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.35);
   --overlay-bg: rgba(0, 0, 0, 0.8);
+  --code-bg: var(--input-bg); /* Use input background for code blocks in dark mode */
 }
 
 * {

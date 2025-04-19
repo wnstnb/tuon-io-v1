@@ -625,7 +625,8 @@ export class CreatorAgentService {
     }
 
     // Clean up potential markdown/code block fences from chat content
-    chatContent = chatContent.replace(/```[\s\S]*?```/g, '[Code Block]').replace(/`/g, ''); // Basic cleaning
+    // chatContent = chatContent.replace(/```[\s\S]*?```/g, '[Code Block]').replace(/`/g, ''); // Basic cleaning - Temporarily commented out code block replacement
+    chatContent = chatContent.replace(/`/g, ''); // Keep backtick cleaning for now
 
     // No longer call convertToBlockNoteFormat here
     return {
