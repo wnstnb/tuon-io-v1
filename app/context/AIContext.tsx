@@ -110,6 +110,7 @@ interface AIContextType {
   ) => Promise<void>;
   followUpText: string | null;
   setFollowUpText: (text: string | null) => void;
+  updateConversationMetadata: (id: string, metadata: Partial<Pick<Conversation, 'title' | 'artifactId'>>) => Promise<void>;
 }
 
 // Create the AI context
@@ -970,35 +971,99 @@ export function AIProvider({ children }: AIProviderProps) {
     setConversationHistory(prev => 
       prev.map(conv => conv.id === conversation.id ? conversation : conv)
     );
+    if (currentConversation?.id === conversation.id) {
+      setCurrentConversation(conversation);
+    }
   };
 
-  return (
-    <AIContext.Provider 
-      value={{
-        currentModel,
-        setCurrentModel,
-        isLoading,
-        isLoadingConversations,
-        currentConversation,
-        conversationHistory,
-        searchHistory,
-        setSearchHistory,
-        createNewConversation,
-        sendMessage,
-        selectConversation,
-        switchModel,
-        loadUserConversations,
-        updateEditorContext,
-        getCurrentEditorContext,
-        findConversationByArtifactId,
-        processEditorSelectionAction,
-        followUpText,
-        setFollowUpText
-      }}
-    >
-      {children}
-    </AIContext.Provider>
-  );
+  // --- ADDED: Function to update conversation metadata (title, artifactId) ---
+  const updateConversationMetadata = useCallback(async (id: string, metadata: Partial<Pick<Conversation, 'title' | 'artifactId'>>) => {
+    if (!currentUser) {
+      console.error("Cannot update metadata: user not logged in.");
+      dispatchNotification("Error: Not logged in.", 'error');
+      return;
+    }
+
+    if (process.env.NODE_ENV === 'development') console.log(`Attempting to update metadata for conversation ${id}:`, metadata);
+
+    // Optimistic UI update
+    const originalConversation = conversationHistory.find(c => c.id === id);
+    let updatedConversation = null;
+    if (originalConversation) {
+      updatedConversation = { ...originalConversation, ...metadata, updatedAt: new Date() };
+      updateConversationInHistory(updatedConversation);
+    } else {
+      console.warn("Conversation not found locally for optimistic update.");
+      // Fetch if needed, or rely on backend success?
+    }
+
+    try {
+      // Call backend service
+      let success = false;
+      if (metadata.title !== undefined) {
+         success = await ConversationService.updateConversationTitle(id, metadata.title);
+      } else if (metadata.artifactId !== undefined) {
+         // TODO: Implement ConversationService.updateConversationArtifactId if needed
+         console.warn('Updating only artifactId not implemented yet in ConversationService');
+         success = false; // Or true if we consider it successful not to call
+      } else {
+        // No relevant metadata to update
+        success = true; 
+      }
+      
+      if (success) {
+        if (process.env.NODE_ENV === 'development') console.log(`Successfully updated metadata for conversation ${id} in DB.`);
+        // Optional: If optimistic update wasn't perfect, re-sync or update state again from success response
+        // For now, assume optimistic update is sufficient on success
+      } else {
+        console.error(`Failed to update metadata for conversation ${id} in DB.`);
+        dispatchNotification("Failed to save title change.", 'error');
+        // Revert optimistic update on failure
+        if (originalConversation) {
+          updateConversationInHistory(originalConversation);
+        }
+      }
+    } catch (error) {
+      console.error(`Error updating conversation metadata for ${id}:`, error);
+      dispatchNotification("An error occurred while saving title.", 'error');
+      // Revert optimistic update on error
+      if (originalConversation) {
+        updateConversationInHistory(originalConversation);
+      }
+    }
+  }, [currentUser, conversationHistory, currentConversation?.id, dispatchNotification]);
+  // --- END Function ---
+
+  // --- Function to delete a conversation ---
+  const deleteConversation = async (id: string) => {
+    // ... existing deleteConversation implementation ...
+  };
+
+  // Context value
+  const value = {
+    currentModel,
+    setCurrentModel,
+    isLoading,
+    isLoadingConversations,
+    currentConversation,
+    conversationHistory,
+    searchHistory,
+    setSearchHistory,
+    createNewConversation,
+    sendMessage,
+    selectConversation,
+    switchModel,
+    loadUserConversations,
+    updateEditorContext,
+    getCurrentEditorContext,
+    findConversationByArtifactId,
+    processEditorSelectionAction,
+    followUpText,
+    setFollowUpText,
+    updateConversationMetadata,
+  };
+
+  return <AIContext.Provider value={value}>{children}</AIContext.Provider>;
 }
 
 // Custom hook to use AI context

@@ -29,6 +29,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/react/style.css";
 import { ArtifactNotFoundError } from '../lib/services/ArtifactService';
 import Image from 'next/image';
+import { AIService } from '../lib/services/AIService';
 
 // Initialize the Newsreader font
 const newsreader = Newsreader({ 
@@ -96,10 +97,10 @@ function EditorPageContent() {
   const [isSyncPending, setIsSyncPending] = useState<boolean>(false); // Local Storage state vs DB state
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null); // Store last sync error message
-  const [userHasManuallySetTitle, setUserHasManuallySetTitle] = useState<boolean>(false); // NEW: Track manual title edits
   const [pendingSyncArtifactId, setPendingSyncArtifactId] = useState<string | null>(null); // ID waiting for DB sync
   const [lastSuccessfulSyncTime, setLastSuccessfulSyncTime] = useState<Date | null>(null); // NEW: Track last successful sync time
-  const [isEditorProcessing, setIsEditorProcessing] = useState<boolean>(false);
+  const [isEditorProcessing, setIsEditorProcessing] = useState<boolean>(false); // Used for title inference, keep for now
+  const [isSuggestingTitle, setIsSuggestingTitle] = useState<boolean>(false); // NEW: State for suggestion loading
 
   // Ref for PanelGroup imperative API
   const panelGroupRef = useRef<ImperativePanelGroupHandle>(null);
@@ -568,122 +569,6 @@ function EditorPageContent() {
   }, []);
   // --- END Editor Reference Setter --- //
 
-  // --- Title Inference Function ---
-  const inferTitle = useCallback(async (artifactId: string, contentForInference: Block[]) => {
-    if (!user) return; // Need user context
-
-    // --- DIAGNOSTIC LOG ---
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[InferTitle Check - Inside Function]', {
-        userHasManuallySetTitle,
-        currentTitle: title, // Log the title state as seen by this function instance
-        shouldSkip: userHasManuallySetTitle || title !== 'Untitled Artifact',
-      });
-    }
-    // --- END DIAGNOSTIC LOG ---
-    // MODIFIED Check: Skip if user manually set the title OR if it's not the default placeholder
-    if (userHasManuallySetTitle || title !== 'Untitled Artifact') {
-       if (process.env.NODE_ENV === 'development') console.log('Skipping title inference: User manually set title or title is not default.', { userHasManuallySetTitle, currentTitle: title });
-       return;
-    }
-
-    const textContent = extractTextForInference(contentForInference);
-
-    if (textContent.length < 20) {
-       if (process.env.NODE_ENV === 'development') console.log('[InferTitle] Skipping due to short content (< 20 chars).');
-      return; // Don't infer if content is too short
-    }
-
-    if (isMounted.current) {
-      setIsEditorProcessing(true); // Set processing state to true
-    }
-
-    if (process.env.NODE_ENV === 'development') console.log(`[InferTitle] Calling API for artifact ${artifactId}`);
-
-    try {
-      const response = await fetch('/api/infer-title', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Ensure cookies are sent
-        body: JSON.stringify({
-          content: textContent,
-          contextType: 'artifact',
-          contextId: artifactId,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.title && isMounted.current) {
-          if (process.env.NODE_ENV === 'development') console.log(`[InferTitle] API success, received title: "${data.title}"`);
-          
-          // --- MODIFIED: Update state directly instead of calling handleTitleChange ---
-          const inferredTitle = data.title;
-          setTitle(inferredTitle);
-          setUserHasManuallySetTitle(true); // <-- Set the flag here
-          setIsDirty(true); // Mark as dirty
-          setLastSyncError(null); // Clear errors
-          // Trigger save with the *new* inferred title and the *current* content
-          debouncedLocalSave(editorContent, inferredTitle); 
-          // --- END MODIFICATION ---
-
-        } else {
-          console.warn('Title inference API call succeeded but returned no title.');
-        }
-      } else {
-        console.error('Title inference API call failed:', response.statusText);
-      }
-    } catch (error) {
-      console.error('Error during title inference:', error);
-      // Optionally handle the error state in UI if needed
-    } finally {
-      if (isMounted.current) {
-        setIsEditorProcessing(false); // Ensure processing state is set to false
-      }
-    }
-    // Remove handleTitleChange from dependencies, add editorContent and debouncedLocalSave
-  }, [user, title, userHasManuallySetTitle, setUserHasManuallySetTitle, editorContent, debouncedLocalSave, setIsEditorProcessing]); // <-- Added setIsEditorProcessing dependency
-
-  // --- NEW: Debounced Check and Inference Function ---
-  const checkAndInferTitleDebounced = useMemo(() =>
-    debounce((contentToCheck: Block[], sourceArtifactIdToCheck?: string) => {
-        if (!isMounted.current) return;
-
-        // Perform the checks *inside* the debounced function using current state
-        if (!sourceArtifactIdToCheck &&
-            title === 'Untitled Artifact' &&
-            !userHasManuallySetTitle &&
-            contentToCheck.length > 0 &&
-            !isEditorProcessing
-            ) {
-            const artifactIdForInference = currentArtifactId; // Use current artifact ID
-            if (artifactIdForInference) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.log(`[InferTitle Check - DEBOUNCED] Conditions met. Triggering inference for artifact ${artifactIdForInference}.`);
-                }
-                // Call the original, non-debounced inferTitle
-                inferTitle(artifactIdForInference, contentToCheck);
-            } else {
-                 if (process.env.NODE_ENV === 'development') {
-                    console.warn('[InferTitle Check - DEBOUNCED] Cannot infer title, missing artifact ID.');
-                 }
-            }
-        } else {
-             // Optional: Log why it skipped *after* the debounce
-             // if (process.env.NODE_ENV === 'development') {
-             //     console.log(`[InferTitle Check - DEBOUNCED] Skipped. Conditions:`, {
-             //        sourceArtifactIdToCheck,
-             //        title,
-             //        userHasManuallySetTitle,
-             //        contentLength: contentToCheck.length,
-             //        isEditorProcessing,
-             //     });
-             // }
-        }
-    }, 1500, { leading: false, trailing: true })
-  // Dependencies: Include all states checked inside the debounced function + inferTitle
-  , [title, userHasManuallySetTitle, isEditorProcessing, currentArtifactId, inferTitle]);
-
   // --- Load Artifact Function ---
   const loadArtifact: (idToLoad: string, user: User) => Promise<void> = useCallback(async (idToLoad, user) => {
     // NEW Check: Prevent UI flash if loading the same ID (e.g., on tab focus)
@@ -703,15 +588,14 @@ function EditorPageContent() {
       setLastSyncError(null);
       setIsArtifactPersisted(false); // Assume not persisted until confirmed
       setCurrentArtifactId(idToLoad); // Set the ID being loaded
-      setUserHasManuallySetTitle(false); // NEW: Reset manual title flag on load
       setIsArtifactLoaded(false); // Reset artifact loaded flag
+      setIsSuggestingTitle(false); // Ensure suggestion loading is reset
     }
 
     let loadedTitle = 'Untitled Artifact';
     let loadedContent: Block[] = [];
     let finalSyncPending = false;
     let loadedDataTimestamp: Date | null = null;
-    let initialUserSetTitle = false; // NEW: Track if loaded title was user-set
 
     try {
       if (process.env.NODE_ENV === 'development') console.log(`Attempting to load artifact data for ID: ${idToLoad}`);
@@ -776,11 +660,6 @@ function EditorPageContent() {
         setIsArtifactPersisted(false); // Explicitly not persisted
       }
 
-      // NEW: Determine if the loaded title indicates a prior manual setting
-      if (loadedTitle !== 'Untitled Artifact') {
-        initialUserSetTitle = true;
-      }
-
       // 4. Update Component State with RAW content
       if (isMounted.current) {
         if (process.env.NODE_ENV === 'development') console.log(`Setting initial editor state (raw): Title=${loadedTitle}, Content blocks=${loadedContent?.length ?? 0}`); // Log count
@@ -789,7 +668,6 @@ function EditorPageContent() {
 
         setIsDirty(false);
         setIsSyncPending(finalSyncPending);
-        setUserHasManuallySetTitle(initialUserSetTitle); // NEW: Set based on loaded title
 
         // Save the loaded state back to local storage as the initial baseline
         if (loadedDataTimestamp) {
@@ -826,12 +704,11 @@ function EditorPageContent() {
   }, [
     user, 
     currentArtifactId,
-    // Restore original dependencies to ensure stability with effects relying on loadArtifact
     findConversationByArtifactId, 
     selectConversation, 
     createNewConversation, 
     currentConversation 
-  ]); // <-- RESTORED AI Context dependencies 
+  ]);
 
   // --- NEW useEffect for Conversation Linking ---
   useEffect(() => {
@@ -884,7 +761,6 @@ function EditorPageContent() {
        if (process.env.NODE_ENV === 'development') console.log(`[Conversation Link Effect] Skipped. isLoadingConversations: ${isLoadingConversations}, user: ${!!user}, currentArtifactId: ${currentArtifactId}`);
     }
   }, [
-    // isArtifactLoaded, // <-- REMOVED
     isLoadingConversations, 
     currentArtifactId, 
     user, 
@@ -902,13 +778,11 @@ function EditorPageContent() {
       setTitle(newTitle);
       setIsDirty(true); // Mark editor as dirty
       setLastSyncError(null); // Clear error when user types
-      setUserHasManuallySetTitle(true); // Mark that user has manually set the title
+      
       // Trigger the debounce on title change, passing current editorContent and new title
-      // Make sure editorContent is available here
       debouncedLocalSave(editorContent, newTitle);
     }
-    // Ensure editorContent is a dependency if used directly (it is)
-  }, [debouncedLocalSave, editorContent]); // Removed userHasManuallySetTitle as it's set here
+  }, [debouncedLocalSave, editorContent]);
 
   // --- Handle Content Change Function ---
   const handleContentChange = useCallback((content: Block[], sourceArtifactId?: string) => {
@@ -975,12 +849,65 @@ function EditorPageContent() {
       setLastSyncError(null); // Clear error when user types
       // Trigger the debounce on content change, passing the new content and current title
       debouncedLocalSave(content, title);
-
-      // --- MODIFIED: Call the debounced check function --- 
-      checkAndInferTitleDebounced(content, sourceArtifactId);
-      // --- END MODIFICATION ---
     }
-  }, [user, currentArtifactId, title, userHasManuallySetTitle, debouncedLocalSave, isEditorProcessing, checkAndInferTitleDebounced]); // Removed inferTitle, added checkAndInferTitleDebounced
+  }, [currentArtifactId, title, debouncedLocalSave, isMounted]); // Adjusted dependencies
+
+  // --- Drawer Toggle Handler ---
+  const toggleDrawer = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
+    if (
+      event.type === 'keydown' &&
+      ((event as React.KeyboardEvent).key === 'Tab' ||
+        (event as React.KeyboardEvent).key === 'Shift')
+    ) {
+      return;
+    }
+    setIsDrawerOpen(open);
+  };
+  // --- END Drawer Handler ---
+
+  // --- NEW: Helper function to dispatch notifications (can be reused if needed) ---
+  const dispatchNotification = useCallback((message: string, type: 'info' | 'error' | 'success', duration?: number) => {
+    const detail: { message: string; type: string; duration?: number } = { message, type };
+    if (duration) {
+      detail.duration = duration;
+    }
+    window.dispatchEvent(new CustomEvent('chat:showNotification', { detail }));
+  }, []);
+  // --- END Helper --- //
+  
+  // --- NEW: Handler for Suggest Artifact Title button --- 
+  const handleSuggestArtifactTitle = useCallback(async () => {
+    if (!currentArtifactId || isSuggestingTitle) return;
+
+    if (process.env.NODE_ENV === 'development') console.log(`[handleSuggestArtifactTitle] Triggered for artifact ${currentArtifactId}`);
+    setIsSuggestingTitle(true);
+
+    // Extract text (ensure this function is still available or move it)
+    const textContent = extractTextForInference(editorContent);
+
+    try {
+      const inferredTitle = await AIService.inferTitle('artifact', currentArtifactId, textContent);
+
+      if (inferredTitle && isMounted.current) {
+        if (process.env.NODE_ENV === 'development') console.log(`[handleSuggestArtifactTitle] Success. Applying title: "${inferredTitle}"`);
+        // Use handleTitleChange to update state and trigger save
+        handleTitleChange(inferredTitle);
+        // handleTitleChange now sets title, isDirty, clears error, and calls debouncedLocalSave
+      } else {
+        if (process.env.NODE_ENV === 'development') console.warn(`[handleSuggestArtifactTitle] Inference returned null or component unmounted.`);
+        // TODO: Optionally show a notification to the user
+        dispatchNotification("Couldn't suggest a title based on the current content.", 'error');
+      }
+    } catch (error) {
+      console.error("[handleSuggestArtifactTitle] Error calling AIService.inferTitle:", error);
+      // TODO: Optionally show a notification to the user
+      dispatchNotification("An error occurred while suggesting a title.", 'error');
+    } finally {
+      if (isMounted.current) {
+        setIsSuggestingTitle(false);
+      }
+    }
+  }, [currentArtifactId, isSuggestingTitle, editorContent, handleTitleChange, extractTextForInference, dispatchNotification]); // Added dependencies
 
   // Memoize editor props (Ensure handleContentChange/handleTitleChange are stable via useCallback)
   const editorProps = useMemo(() => {
@@ -1013,29 +940,6 @@ function EditorPageContent() {
       console.error('Error checking localStorage for artifact:', e);
     }
   }, [currentArtifactId, isArtifactPersisted]);
-
-  // --- Drawer Toggle Handler ---
-  const toggleDrawer = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
-    if (
-      event.type === 'keydown' &&
-      ((event as React.KeyboardEvent).key === 'Tab' ||
-        (event as React.KeyboardEvent).key === 'Shift')
-    ) {
-      return;
-    }
-    setIsDrawerOpen(open);
-  };
-  // --- END Drawer Handler ---
-
-  // --- NEW: Helper function to dispatch notifications (can be reused if needed) ---
-  const dispatchNotification = useCallback((message: string, type: 'info' | 'error' | 'success', duration?: number) => {
-    const detail: { message: string; type: string; duration?: number } = { message, type };
-    if (duration) {
-      detail.duration = duration;
-    }
-    window.dispatchEvent(new CustomEvent('chat:showNotification', { detail }));
-  }, []);
-  // --- END Helper --- //
 
   // --- START: Toast Notification Effect (Modified for Inline Notification) ---
   useEffect(() => {
@@ -1316,6 +1220,8 @@ function EditorPageContent() {
                 isPersisted={isArtifactPersisted}
                 lastSynced={lastSuccessfulSyncTime ? lastSuccessfulSyncTime.toISOString() : null}
                 onForceSync={forceSync}
+                onSuggestTitle={handleSuggestArtifactTitle}
+                isSuggestingTitle={isSuggestingTitle}
               />
               <div className="flex-grow overflow-auto relative">
                   <Suspense fallback={<EditorLoading />}>
